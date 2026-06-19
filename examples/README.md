@@ -40,8 +40,12 @@ uv run python examples/login_password.py
 uv run python examples/phone_auth.py
 uv run python examples/check_addresses.py
 uv run python examples/check_balance.py
+uv run python examples/inspect_domofon_relays.py
 ```
 
 `phone_auth.py` выводит список адресов после подтверждения телефона и получает token
 для выбранного адреса. Этот token можно сохранить в `IS74_MOBILE_TOKEN` для следующих
 примеров.
+
+`inspect_domofon_relays.py` печатает сырой JSON ответа `/domofon/relays`. Этот пример
+нужен перед реализацией доменного API домофона, чтобы зафиксировать реальные поля ответа.
