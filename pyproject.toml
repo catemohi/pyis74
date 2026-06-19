@@ -26,9 +26,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/nordn/pyis74"
-Repository = "https://github.com/nordn/pyis74"
-Issues = "https://github.com/nordn/pyis74/issues"
+Homepage = "https://github.com/catemohi/pyis74"
+Repository = "https://github.com/catemohi/pyis74"
+Issues = "https://github.com/catemohi/pyis74/issues"
 
 [dependency-groups]
 lint = [
