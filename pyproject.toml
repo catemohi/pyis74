@@ -56,9 +56,6 @@ dev = [
 [tool.hatch.version]
 source = "vcs"
 
-[tool.hatch.build.hooks.vcs]
-version-file = "src/pyis74/_version.py"
-
 [tool.hatch.build.targets.wheel]
 packages = ["src/pyis74"]
 
@@ -148,4 +145,3 @@ source = ["pyis74"]
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
-
