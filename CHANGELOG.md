@@ -6,7 +6,9 @@
 
 ## [Unreleased]
 
-Пока нет изменений.
+### Documentation
+
+- Добавлены ссылки на PyPI package, GitHub Releases и workflow status badges.
 
 ## [0.5.1] - 2026-06-20
 

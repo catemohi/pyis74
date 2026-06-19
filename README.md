@@ -1,5 +1,10 @@
 # pyis74
 
+[![PyPI version](https://img.shields.io/pypi/v/pyis74.svg)](https://pypi.org/project/pyis74/)
+[![Python versions](https://img.shields.io/pypi/pyversions/pyis74.svg)](https://pypi.org/project/pyis74/)
+[![CI](https://github.com/catemohi/pyis74/actions/workflows/ci.yml/badge.svg)](https://github.com/catemohi/pyis74/actions/workflows/ci.yml)
+[![Release](https://github.com/catemohi/pyis74/actions/workflows/release.yml/badge.svg)](https://github.com/catemohi/pyis74/actions/workflows/release.yml)
+
 `pyis74` - Python-библиотека для работы с API IS74/Интерсвязь.
 
 Проект находится на раннем этапе разработки. Цель библиотеки - предоставить современный,
@@ -11,6 +16,22 @@
 - получение камер и ссылок на видеопотоки;
 - получение данных личного кабинета;
 - история событий.
+
+## Установка
+
+Пакет опубликован в PyPI: [`pyis74`](https://pypi.org/project/pyis74/).
+Стабильные сборки и исходные архивы также доступны в
+[GitHub Releases](https://github.com/catemohi/pyis74/releases).
+
+```bash
+pip install pyis74
+```
+
+Для воспроизводимой установки конкретного релиза:
+
+```bash
+pip install pyis74==0.5.1
+```
 
 ## Требования
 
