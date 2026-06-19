@@ -664,6 +664,126 @@ class DomofonOpenResult:
     response_text: str
 
 
+@dataclass(frozen=True, slots=True)
+class HistoryEventParams:
+    """Параметры события истории.
+
+    Args:
+        mac: MAC-адрес устройства, если API его вернул.
+        address: Адрес события, если API его вернул.
+        entrance_title: Описание подъезда или точки доступа.
+        raw: Исходный JSON-объект `params`.
+    """
+
+    mac: str | None
+    address: str | None
+    entrance_title: str | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает параметры события истории из JSON.
+
+        Args:
+            payload: JSON-объект `params`.
+
+        Returns:
+            Параметры события.
+        """
+        return cls(
+            mac=get_str(payload, "mac"),
+            address=get_str(payload, "address"),
+            entrance_title=get_str(payload, "entranceTitle"),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class HistoryEvent:
+    """Событие истории IS74.
+
+    Args:
+        create_date: Исходная дата события из API.
+        created_at: Дата события в формате `datetime`, если ее удалось распарсить.
+        event_type: Тип события, например `OPEN_API`, `OPEN_INTERNAL` или `HANDSET_CALL`.
+        params: Параметры события.
+        image_link: Ссылка на snapshot события, если API ее вернул.
+        raw: Исходный JSON-объект события.
+    """
+
+    create_date: str | None
+    created_at: datetime | None
+    event_type: str | None
+    params: HistoryEventParams | None
+    image_link: str | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает событие истории из JSON.
+
+        Args:
+            payload: JSON-объект события.
+
+        Returns:
+            Событие истории.
+        """
+        params_payload = get_json_object(payload, "params")
+        create_date = get_str(payload, "create_date")
+        return cls(
+            create_date=create_date,
+            created_at=parse_datetime(create_date),
+            event_type=get_str(payload, "type"),
+            params=(
+                HistoryEventParams.from_json_object(params_payload)
+                if params_payload is not None
+                else None
+            ),
+            image_link=get_str(payload, "image_link"),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class HistoryResponse:
+    """Страница истории событий IS74.
+
+    Args:
+        events: События текущей страницы.
+        page: Номер текущей страницы.
+        per_page: Количество записей на странице.
+        count: Общее количество записей.
+        raw: Исходный JSON-ответ API.
+    """
+
+    events: tuple[HistoryEvent, ...]
+    page: int | None
+    per_page: int | None
+    count: int | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает страницу истории из JSON.
+
+        Args:
+            payload: JSON-ответ `td-crm.is74.ru/api/user/history`.
+
+        Returns:
+            Страница истории событий.
+        """
+        return cls(
+            events=tuple(
+                HistoryEvent.from_json_object(event)
+                for event in get_json_object_list(payload, "data")
+            ),
+            page=get_int(payload, "page"),
+            per_page=get_int(payload, "perPage"),
+            count=get_int(payload, "count"),
+            raw=payload,
+        )
+
+
 def get_str(payload: JsonObject, key: str) -> str | None:
     """Возвращает строковое поле из JSON-объекта.
 

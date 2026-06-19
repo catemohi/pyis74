@@ -28,3 +28,10 @@ def test_package_exports_domofon_models() -> None:
     """Проверяет, что пакет экспортирует модели домофона."""
     assert pyis74.DomofonRelay is not None
     assert pyis74.DomofonOpenResult is not None
+
+
+def test_package_exports_history_models() -> None:
+    """Проверяет, что пакет экспортирует модели истории."""
+    assert pyis74.HistoryEvent is not None
+    assert pyis74.HistoryEventParams is not None
+    assert pyis74.HistoryResponse is not None

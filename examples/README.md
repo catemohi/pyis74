@@ -54,6 +54,15 @@ export RELAY_ID="900001"
 export IS74_FROM_APP="no"
 ```
 
+Для истории событий можно задать фильтр и пагинацию:
+
+```bash
+export IS74_HISTORY_FROM="2026-06-01"
+export IS74_HISTORY_TO="2026-06-19"
+export IS74_HISTORY_PAGE="1"
+export IS74_HISTORY_PER_PAGE="20"
+```
+
 ## Запуск
 
 ```bash
@@ -65,6 +74,7 @@ uv run python examples/check_balance.py
 uv run python examples/inspect_domofon_relays.py
 uv run python examples/inspect_domofon_relay.py
 uv run python examples/list_domofon_relays.py
+uv run python examples/list_history.py
 uv run python examples/open_domofon_relay.py
 uv run python examples/open_domofon_relay_api.py
 ```
@@ -75,6 +85,12 @@ uv run python examples/open_domofon_relay_api.py
 
 `login_lk.py` получает CRM/LK token через текущий mobile token. Он нужен для части
 `td-crm.is74.ru` методов, включая CRM-ссылки открытия из SIP/домофонного API.
+
+`list_history.py` получает историю событий через CRM/LK API
+`GET https://td-crm.is74.ru/api/user/history`. Пример поддерживает фильтры
+`IS74_HISTORY_FROM`, `IS74_HISTORY_TO`, `IS74_HISTORY_PAGE` и
+`IS74_HISTORY_PER_PAGE`. Если LK token еще не получен, клиент получает его через
+текущий mobile token.
 
 `inspect_domofon_relays.py` печатает сырой JSON ответа `/domofon/relays`. Этот пример
 нужен перед реализацией доменного API домофона, чтобы зафиксировать реальные поля ответа.

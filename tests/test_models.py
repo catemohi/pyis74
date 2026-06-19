@@ -6,7 +6,16 @@ from decimal import Decimal
 import pytest
 
 from pyis74.exceptions import IS74APIError
-from pyis74.models import Balance, LkToken, MobileToken, PhoneConfirmationCheck, parse_datetime
+from pyis74.models import (
+    Balance,
+    HistoryResponse,
+    LkToken,
+    MobileToken,
+    PhoneConfirmationCheck,
+    parse_datetime,
+)
+
+HISTORY_PER_PAGE = 20
 
 
 def test_mobile_token_from_json_object() -> None:
@@ -77,6 +86,39 @@ def test_balance_from_json_object() -> None:
     assert balance.next_payment.amount == Decimal("700")
     assert balance.debt == Decimal("0")
     assert balance.blocked == "N"
+
+
+def test_history_response_from_json_object() -> None:
+    """Проверяет разбор страницы истории."""
+    history = HistoryResponse.from_json_object(
+        {
+            "data": [
+                {
+                    "create_date": "2026-06-19T12:30:00Z",
+                    "type": "HANDSET_CALL",
+                    "params": {
+                        "mac": "02:00:00:00:00:01",
+                        "address": "Тестоград, ул. Примерная, 1",
+                        "entranceTitle": "Подъезд 1",
+                    },
+                    "image_link": "https://example.invalid/history/snapshot.jpg",
+                }
+            ],
+            "page": "1",
+            "perPage": str(HISTORY_PER_PAGE),
+            "count": "1",
+        }
+    )
+
+    assert history.page == 1
+    assert history.per_page == HISTORY_PER_PAGE
+    assert history.count == 1
+    assert len(history.events) == 1
+    event = history.events[0]
+    assert event.created_at == datetime(2026, 6, 19, 12, 30, tzinfo=UTC)
+    assert event.event_type == "HANDSET_CALL"
+    assert event.params is not None
+    assert event.params.entrance_title == "Подъезд 1"
 
 
 def test_parse_datetime_handles_naive_value_as_utc() -> None:

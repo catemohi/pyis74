@@ -14,6 +14,7 @@ from pyis74.auth import AuthAPI, SyncAuthAPI
 from pyis74.domofon import DomofonAPI, SyncDomofonAPI
 from pyis74.endpoints import join_url
 from pyis74.exceptions import IS74AuthRequiredError, IS74Error, IS74TransportError
+from pyis74.history import HistoryAPI, SyncHistoryAPI
 from pyis74.options import ClientRequestOptions
 from pyis74.transport import (
     DEFAULT_BACKOFF_FACTOR,
@@ -57,6 +58,7 @@ class IS74Async:
         self.auth: AuthAPI = AuthAPI(self)
         self.account: AccountAPI = AccountAPI(self)
         self.domofon: DomofonAPI = DomofonAPI(self)
+        self.history: HistoryAPI = HistoryAPI(self)
 
     async def __aenter__(self) -> IS74Async:
         """Возвращает асинхронный клиент для context manager."""
@@ -260,12 +262,14 @@ class IS74:
     auth: SyncAuthAPI = field(init=False)
     account: SyncAccountAPI = field(init=False)
     domofon: SyncDomofonAPI = field(init=False)
+    history: SyncHistoryAPI = field(init=False)
 
     def __post_init__(self) -> None:
         """Инициализирует синхронные домены API."""
         self.auth = SyncAuthAPI(self)
         self.account = SyncAccountAPI(self)
         self.domofon = SyncDomofonAPI(self)
+        self.history = SyncHistoryAPI(self)
 
     def request(
         self,
