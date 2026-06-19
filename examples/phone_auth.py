@@ -29,7 +29,7 @@ async def main() -> None:
         checked = await client.auth.check_phone_confirmation(
             phone,
             code,
-            auth_id=started.auth_id or "",
+            device_id=started.device_id,
         )
 
         print("Доступные адреса:")
@@ -45,7 +45,6 @@ async def main() -> None:
         token = await client.auth.get_token_for_user(
             auth_id=checked.auth_id,
             user_id=selected_address.user_id,
-            device_id=started.device_id,
         )
 
     print(f"Selected USER_ID: {selected_address.user_id}")

@@ -24,8 +24,15 @@ def test_mobile_token_from_json_object() -> None:
 
 def test_mobile_token_requires_token_field() -> None:
     """Проверяет валидацию обязательного поля `TOKEN`."""
-    with pytest.raises(IS74APIError, match="TOKEN"):
+    with pytest.raises(IS74APIError, match="TOKEN or token"):
         MobileToken.from_json_object({"ACCESS_END": "2026-06-19T12:30:00Z"})
+
+
+def test_mobile_token_accepts_lower_case_token_field() -> None:
+    """Проверяет поддержку ответа с полем `token`."""
+    token = MobileToken.from_json_object({"token": "mobile-token"})
+
+    assert token.token == "mobile-token"
 
 
 def test_phone_confirmation_check_parses_addresses() -> None:

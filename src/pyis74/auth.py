@@ -65,9 +65,9 @@ class AuthAPI:
         actual_device_id = device_id or generate_device_id()
         payload = await self._client.request(
             "POST",
-            endpoints.AUTH_GET_CONFIRM,
+            endpoints.AUTH_SEND_SMS,
             ClientRequestOptions(
-                json_body={"deviceId": actual_device_id, "phone": normalized_phone}
+                json_body={"phone": normalized_phone, "uniqueDeviceId": actual_device_id}
             ),
         )
         return PhoneConfirmationStart.from_json_object(
@@ -80,26 +80,26 @@ class AuthAPI:
         phone: str,
         code: str,
         *,
-        auth_id: str = "",
+        device_id: str,
     ) -> PhoneConfirmationCheck:
         """Проверяет код подтверждения телефона.
 
         Args:
             phone: Номер телефона. Можно передавать с `+7`, `7` или `8`.
             code: Код из SMS или последние цифры номера входящего звонка.
-            auth_id: Идентификатор auth-сессии. Для совместимости допускается пустая строка.
+            device_id: Идентификатор устройства из `request_phone_confirmation`.
 
         Returns:
             Результат проверки кода и список доступных адресов.
         """
         payload = await self._client.request(
             "POST",
-            endpoints.AUTH_CHECK_CONFIRM,
+            endpoints.AUTH_CONFIRM,
             ClientRequestOptions(
-                form={
-                    "phone": normalize_phone(phone),
+                json_body={
                     "confirmCode": code,
-                    "authId": auth_id,
+                    "phone": normalize_phone(phone),
+                    "uniqueDeviceId": device_id,
                 }
             ),
         )
@@ -110,7 +110,7 @@ class AuthAPI:
         *,
         auth_id: str,
         user_id: int,
-        device_id: str,
+        device_id: str | None = None,
     ) -> MobileToken:
         """Получает mobile token для выбранного адреса пользователя.
 
@@ -118,6 +118,8 @@ class AuthAPI:
             auth_id: Идентификатор auth-сессии из `check_phone_confirmation`.
             user_id: `USER_ID` выбранного адреса.
             device_id: Идентификатор устройства из `request_phone_confirmation`.
+                Аргумент оставлен для совместимости; текущий API не требует его
+                в `get-token` payload.
 
         Returns:
             Mobile access token.
@@ -129,7 +131,6 @@ class AuthAPI:
                 json_body={
                     "authId": auth_id,
                     "userId": str(user_id),
-                    "uniqueDeviceId": device_id,
                 }
             ),
         )
@@ -185,29 +186,37 @@ class SyncAuthAPI:
         phone: str,
         code: str,
         *,
-        auth_id: str = "",
+        device_id: str,
     ) -> PhoneConfirmationCheck:
         """Проверяет код подтверждения телефона.
 
         Args:
             phone: Номер телефона. Можно передавать с `+7`, `7` или `8`.
             code: Код из SMS или последние цифры номера входящего звонка.
-            auth_id: Идентификатор auth-сессии. Для совместимости допускается пустая строка.
+            device_id: Идентификатор устройства из `request_phone_confirmation`.
 
         Returns:
             Результат проверки кода и список доступных адресов.
         """
         return self._client._run(
-            lambda client: client.auth.check_phone_confirmation(phone, code, auth_id=auth_id)
+            lambda client: client.auth.check_phone_confirmation(phone, code, device_id=device_id)
         )
 
-    def get_token_for_user(self, *, auth_id: str, user_id: int, device_id: str) -> MobileToken:
+    def get_token_for_user(
+        self,
+        *,
+        auth_id: str,
+        user_id: int,
+        device_id: str | None = None,
+    ) -> MobileToken:
         """Получает mobile token для выбранного адреса пользователя.
 
         Args:
             auth_id: Идентификатор auth-сессии из `check_phone_confirmation`.
             user_id: `USER_ID` выбранного адреса.
             device_id: Идентификатор устройства из `request_phone_confirmation`.
+                Аргумент оставлен для совместимости; текущий API не требует его
+                в `get-token` payload.
 
         Returns:
             Mobile access token.

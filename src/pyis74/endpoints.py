@@ -51,6 +51,8 @@ def join_url(base_url: BaseUrl | str, path: str) -> str:
 
 
 AUTH_MOBILE: Final = join_url(BaseUrl.API, "/auth/mobile")
+AUTH_SEND_SMS: Final = join_url(BaseUrl.API, "/mobile/auth/send-sms")
+AUTH_CONFIRM: Final = join_url(BaseUrl.API, "/mobile/auth/confirm")
 AUTH_GET_CONFIRM: Final = join_url(BaseUrl.API, "/mobile/auth/get-confirm")
 AUTH_CHECK_CONFIRM: Final = join_url(BaseUrl.API, "/mobile/auth/check-confirm")
 AUTH_GET_TOKEN: Final = join_url(BaseUrl.API, "/mobile/auth/get-token")

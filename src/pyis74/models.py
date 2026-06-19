@@ -38,9 +38,9 @@ class MobileToken:
         Raises:
             IS74APIError: В ответе нет строкового поля `TOKEN`.
         """
-        token = get_str(payload, "TOKEN")
+        token = get_str(payload, "TOKEN") or get_str(payload, "token")
         if token is None:
-            msg = "IS74 auth response does not contain TOKEN."
+            msg = "IS74 auth response does not contain TOKEN or token."
             raise IS74APIError(msg, payload)
         return cls(
             token=token,
