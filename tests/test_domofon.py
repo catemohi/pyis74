@@ -162,6 +162,7 @@ async def test_open_relay_uses_api_open_link_with_from_app(httpx_mock: HTTPXMock
     request = httpx_mock.get_request()
     assert request is not None
     assert request.headers["authorization"] == "Bearer mobile-token"
+    assert request.headers["content-type"] == "application/json"
 
 
 @pytest.mark.asyncio
@@ -181,6 +182,27 @@ async def test_open_relay_by_api_id_uses_direct_api_path(httpx_mock: HTTPXMock) 
     request = httpx_mock.get_request()
     assert request is not None
     assert request.headers["authorization"] == "Bearer mobile-token"
+    assert request.headers["content-type"] == "application/json"
+
+
+@pytest.mark.asyncio
+async def test_open_relay_by_api_id_can_skip_from_app(httpx_mock: HTTPXMock) -> None:
+    """Проверяет прямое открытие API-реле без query-параметра `from=app`."""
+    httpx_mock.add_response(
+        method="POST",
+        url=f"https://api.is74.ru/domofon/relays/{API_RELAY_ID}/open",
+        json={"result": "ok"},
+    )
+
+    async with IS74Async(backoff_factor=0, mobile_token="mobile-token") as client:
+        result = await client.domofon.open_relay_by_api_id(API_RELAY_ID, from_app=False)
+
+    assert result.status_code == HTTP_OK
+    assert result.payload == {"result": "ok"}
+    request = httpx_mock.get_request()
+    assert request is not None
+    assert request.headers["authorization"] == "Bearer mobile-token"
+    assert request.headers["content-type"] == "application/json"
 
 
 @pytest.mark.asyncio

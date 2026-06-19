@@ -84,6 +84,60 @@ def read_int_env(name: str) -> int:
         raise RuntimeError(msg) from error
 
 
+def read_named_int_env(*names: str) -> tuple[str, int]:
+    """Возвращает первое найденное целое число из списка переменных окружения.
+
+    Args:
+        *names: Имена переменных окружения в порядке приоритета.
+
+    Returns:
+        Пара из имени найденной переменной и ее целочисленного значения.
+
+    Raises:
+        RuntimeError: Ни одна переменная не задана или найденное значение не является числом.
+    """
+    for name in names:
+        value = optional_env(name)
+        if value is None:
+            continue
+        try:
+            return name, int(value)
+        except ValueError as error:
+            msg = f"{name} must be an integer: {value!r}."
+            raise RuntimeError(msg) from error
+
+    expected_names = " or ".join(names)
+    msg = f"Set {expected_names} environment variable."
+    raise RuntimeError(msg)
+
+
+def read_bool_env(name: str, *, default: bool) -> bool:
+    """Возвращает boolean-значение из переменной окружения.
+
+    Args:
+        name: Имя переменной окружения.
+        default: Значение по умолчанию, если переменная не задана.
+
+    Returns:
+        `True` для yes/true/1/on, `False` для no/false/0/off.
+
+    Raises:
+        RuntimeError: Значение переменной не похоже на boolean.
+    """
+    value = optional_env(name)
+    if value is None:
+        return default
+
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+
+    msg = f"{name} must be one of yes/no, true/false, 1/0, on/off: {value!r}."
+    raise RuntimeError(msg)
+
+
 def mask_secret(value: str) -> str:
     """Маскирует секрет для вывода в консоль.
 

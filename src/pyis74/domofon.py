@@ -14,6 +14,8 @@ from pyis74.types import JsonValue, normalize_json_object, normalize_json_value
 if TYPE_CHECKING:
     from pyis74.client import IS74, IS74Async
 
+JSON_HEADERS: dict[str, str] = {"Content-Type": "application/json"}
+
 
 class DomofonAPI:
     """Асинхронный домен домофонов IS74."""
@@ -100,7 +102,8 @@ class DomofonAPI:
             return build_open_result(response.status_code, response.text, response.content)
 
         options = ClientRequestOptions(
-            params={"from": "app"} if should_add_from_app(target, from_app=from_app) else None
+            headers=JSON_HEADERS,
+            params={"from": "app"} if should_add_from_app(target, from_app=from_app) else None,
         )
         response = await self._client._request_mobile_response("POST", target, options)
         return build_open_result(response.status_code, response.text, response.content)
@@ -153,7 +156,10 @@ class DomofonAPI:
             Результат успешного HTTP-запроса открытия.
         """
         target = endpoints.DOMOFON_RELAY_OPEN_TEMPLATE.format(relay_id=relay_id)
-        options = ClientRequestOptions(params={"from": "app"} if from_app else None)
+        options = ClientRequestOptions(
+            headers=JSON_HEADERS,
+            params={"from": "app"} if from_app else None,
+        )
         response = await self._client._request_mobile_response("POST", target, options)
         return build_open_result(response.status_code, response.text, response.content)
 

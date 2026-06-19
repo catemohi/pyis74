@@ -40,6 +40,20 @@ export IS74_RELAY_ID="900001"
 export IS74_CONFIRM_OPEN="yes"
 ```
 
+Для интерактивной отладки можно использовать короткий alias:
+
+```bash
+export RELAY_ID="900001"
+```
+
+`IS74_RELAY_ID` имеет приоритет над `RELAY_ID`.
+
+Для direct API открытия можно отключить query-параметр `from=app`:
+
+```bash
+export IS74_FROM_APP="no"
+```
+
 ## Запуск
 
 ```bash
@@ -66,9 +80,12 @@ uv run python examples/open_domofon_relay_api.py
 нужен перед реализацией доменного API домофона, чтобы зафиксировать реальные поля ответа.
 
 `list_domofon_relays.py` печатает типизированный список реле. `open_domofon_relay.py`
-открывает реле по `IS74_RELAY_ID` через `LINKS.open` из списка реле и требует
-`IS74_CONFIRM_OPEN=yes`, чтобы случайный запуск не отправил команду открытия.
+открывает реле по `IS74_RELAY_ID` или `RELAY_ID` через `LINKS.open` из списка реле,
+печатает фактически выбранный `RELAY_ID` и требует `IS74_CONFIRM_OPEN=yes`, чтобы
+случайный запуск не отправил команду открытия.
 
 `inspect_domofon_relay.py` печатает сырой JSON ответа `/domofon/relays/{relay_id}`.
 `open_domofon_relay_api.py` открывает реле прямым запросом
-`POST /domofon/relays/{relay_id}/open?from=app`, без использования `LINKS.open`.
+`POST /domofon/relays/{relay_id}/open`, без использования `LINKS.open`.
+По умолчанию добавляется `?from=app`; для проверки варианта без query-параметра
+задайте `IS74_FROM_APP=no`.
