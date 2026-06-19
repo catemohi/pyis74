@@ -44,6 +44,7 @@ export IS74_CONFIRM_OPEN="yes"
 
 ```bash
 uv run python examples/login_password.py
+uv run python examples/login_lk.py
 uv run python examples/phone_auth.py
 uv run python examples/check_addresses.py
 uv run python examples/check_balance.py
@@ -57,6 +58,9 @@ uv run python examples/open_domofon_relay_api.py
 `phone_auth.py` выводит список адресов после подтверждения телефона и получает token
 для выбранного адреса. Этот token можно сохранить в `IS74_MOBILE_TOKEN` для следующих
 примеров.
+
+`login_lk.py` получает CRM/LK token через текущий mobile token. Он нужен для части
+`td-crm.is74.ru` методов, включая CRM-ссылки открытия из SIP/домофонного API.
 
 `inspect_domofon_relays.py` печатает сырой JSON ответа `/domofon/relays`. Этот пример
 нужен перед реализацией доменного API домофона, чтобы зафиксировать реальные поля ответа.

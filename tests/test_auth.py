@@ -7,7 +7,7 @@ import json
 import pytest
 from pytest_httpx import HTTPXMock
 
-from pyis74 import IS74Async, endpoints
+from pyis74 import IS74Async, IS74AuthRequiredError, endpoints
 from pyis74.auth import normalize_phone
 
 USER_ID = 100
@@ -30,6 +30,33 @@ async def test_login_with_password_sets_mobile_token(httpx_mock: HTTPXMock) -> N
     request = httpx_mock.get_request()
     assert request is not None
     assert json.loads(request.content) == {"username": "user", "password": "secret"}
+
+
+@pytest.mark.asyncio
+async def test_get_lk_token_uses_mobile_token(httpx_mock: HTTPXMock) -> None:
+    """Проверяет получение CRM/LK token по mobile token."""
+    httpx_mock.add_response(
+        method="POST",
+        url=endpoints.CRM_AUTH_LK,
+        json={"TOKEN": "lk-token", "ACCESS_END": "2026-06-19T12:30:00Z"},
+    )
+
+    async with IS74Async(backoff_factor=0, mobile_token="mobile-token") as client:
+        token = await client.auth.get_lk_token()
+
+    assert token.token == "lk-token"
+    assert client.lk_token == "lk-token"
+    request = httpx_mock.get_request()
+    assert request is not None
+    assert json.loads(request.content) == {"buyerId": 1, "token": "mobile-token"}
+
+
+@pytest.mark.asyncio
+async def test_get_lk_token_requires_mobile_token() -> None:
+    """Проверяет ошибку получения CRM/LK token без mobile token."""
+    async with IS74Async(backoff_factor=0) as client:
+        with pytest.raises(IS74AuthRequiredError):
+            await client.auth.get_lk_token()
 
 
 @pytest.mark.asyncio

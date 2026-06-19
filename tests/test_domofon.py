@@ -185,24 +185,29 @@ async def test_open_relay_by_api_id_uses_direct_api_path(httpx_mock: HTTPXMock) 
 
 @pytest.mark.asyncio
 async def test_open_relay_by_id_uses_crm_open_link(httpx_mock: HTTPXMock) -> None:
-    """Проверяет открытие CRM-реле через ссылку из списка реле."""
+    """Проверяет открытие CRM-реле через LK token и ссылку из списка реле."""
     crm_url = f"https://td-crm.is74.ru/api/open/{CRM_MAC}/1"
     httpx_mock.add_response(
         method="GET",
         url=endpoints.DOMOFON_RELAYS,
         json=[build_api_relay_payload(), build_crm_relay_payload()],
     )
-    httpx_mock.add_response(method="POST", url=crm_url, status_code=HTTP_NO_CONTENT)
+    httpx_mock.add_response(method="POST", url=endpoints.CRM_AUTH_LK, json={"TOKEN": "lk-token"})
+    httpx_mock.add_response(method="GET", url=crm_url, status_code=HTTP_NO_CONTENT)
 
     async with IS74Async(backoff_factor=0, mobile_token="mobile-token") as client:
         result = await client.domofon.open_relay_by_id(CRM_RELAY_ID)
 
     assert result.status_code == HTTP_NO_CONTENT
     assert result.payload is None
-    assert [str(request.url) for request in httpx_mock.get_requests()] == [
+    requests = httpx_mock.get_requests()
+    assert [str(request.url) for request in requests] == [
         endpoints.DOMOFON_RELAYS,
+        endpoints.CRM_AUTH_LK,
         crm_url,
     ]
+    assert requests[0].headers["authorization"] == "Bearer mobile-token"
+    assert requests[2].headers["authorization"] == "Bearer lk-token"
 
 
 def test_sync_client_gets_relays(httpx_mock: HTTPXMock) -> None:

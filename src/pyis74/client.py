@@ -53,6 +53,7 @@ class IS74Async:
             backoff_factor=backoff_factor,
         )
         self._mobile_token = mobile_token
+        self._lk_token: str | None = None
         self.auth: AuthAPI = AuthAPI(self)
         self.account: AccountAPI = AccountAPI(self)
         self.domofon: DomofonAPI = DomofonAPI(self)
@@ -91,6 +92,23 @@ class IS74Async:
     def clear_mobile_token(self) -> None:
         """Удаляет mobile access token из клиента."""
         self._mobile_token = None
+
+    @property
+    def lk_token(self) -> str | None:
+        """Возвращает текущий CRM/LK access token."""
+        return self._lk_token
+
+    def set_lk_token(self, token: str) -> None:
+        """Сохраняет CRM/LK access token в клиенте.
+
+        Args:
+            token: Bearer-токен CRM/LK API.
+        """
+        self._lk_token = token
+
+    def clear_lk_token(self) -> None:
+        """Удаляет CRM/LK access token из клиента."""
+        self._lk_token = None
 
     async def request(
         self,
@@ -164,6 +182,36 @@ class IS74Async:
             raise IS74AuthRequiredError(msg)
         return await self.request(method, target, replace(request_options, auth_token=token))
 
+    async def request_lk(
+        self,
+        method: str,
+        target: str,
+        options: ClientRequestOptions | None = None,
+    ) -> JsonValue:
+        """Выполняет JSON-запрос с CRM/LK access token.
+
+        Если `lk_token` еще не получен, клиент пытается получить его через
+        `auth.get_lk_token()` по текущему mobile token.
+
+        Args:
+            method: HTTP-метод.
+            target: Относительный endpoint или абсолютный URL.
+            options: Параметры клиентского запроса.
+
+        Returns:
+            Нормализованный JSON-ответ.
+
+        Raises:
+            IS74AuthRequiredError: В клиенте нет LK token и нет mobile token для его получения.
+        """
+        response = await self._request_lk_response(method, target, options)
+        try:
+            payload: object = response.json()
+        except ValueError as error:
+            msg = f"Invalid JSON response for {method.upper()} {response.url}."
+            raise IS74TransportError(msg) from error
+        return normalize_json_value(payload)
+
     async def _request_mobile_response(
         self,
         method: str,
@@ -182,6 +230,23 @@ class IS74Async:
             replace(request_options, auth_token=token),
         )
 
+    async def _request_lk_response(
+        self,
+        method: str,
+        target: str,
+        options: ClientRequestOptions | None = None,
+    ) -> httpx.Response:
+        """Выполняет HTTP-запрос с CRM/LK access token."""
+        request_options = options or ClientRequestOptions()
+        token = request_options.auth_token or self._lk_token
+        if token is None:
+            token = (await self.auth.get_lk_token()).token
+        return await self._request_response(
+            method,
+            target,
+            replace(request_options, auth_token=token),
+        )
+
 
 @dataclass(slots=True, kw_only=True)
 class IS74:
@@ -191,6 +256,7 @@ class IS74:
     max_retries: int = DEFAULT_MAX_RETRIES
     backoff_factor: float = DEFAULT_BACKOFF_FACTOR
     mobile_token: str | None = None
+    lk_token: str | None = None
     auth: SyncAuthAPI = field(init=False)
     account: SyncAccountAPI = field(init=False)
     domofon: SyncDomofonAPI = field(init=False)
@@ -256,6 +322,36 @@ class IS74:
         """Удаляет mobile access token из клиента."""
         self.mobile_token = None
 
+    def request_lk(
+        self,
+        method: str,
+        target: str,
+        options: ClientRequestOptions | None = None,
+    ) -> JsonValue:
+        """Выполняет синхронный JSON-запрос с CRM/LK access token.
+
+        Args:
+            method: HTTP-метод.
+            target: Относительный endpoint или абсолютный URL.
+            options: Параметры клиентского запроса.
+
+        Returns:
+            Нормализованный JSON-ответ.
+        """
+        return self._run(lambda client: client.request_lk(method, target, options))
+
+    def set_lk_token(self, token: str) -> None:
+        """Сохраняет CRM/LK access token в клиенте.
+
+        Args:
+            token: Bearer-токен CRM/LK API.
+        """
+        self.lk_token = token
+
+    def clear_lk_token(self) -> None:
+        """Удаляет CRM/LK access token из клиента."""
+        self.lk_token = None
+
     def _run[ResultT](self, action: Callable[[IS74Async], Awaitable[ResultT]]) -> ResultT:
         """Запускает действие в одноразовом асинхронном клиенте."""
         return _run_sync(self._run_async(action))
@@ -271,10 +367,13 @@ class IS74:
             backoff_factor=self.backoff_factor,
             mobile_token=self.mobile_token,
         ) as client:
+            if self.lk_token is not None:
+                client.set_lk_token(self.lk_token)
             try:
                 return await action(client)
             finally:
                 self.mobile_token = client.mobile_token
+                self.lk_token = client.lk_token
 
 
 def _run_sync[ResultT](coroutine: Coroutine[object, object, ResultT]) -> ResultT:

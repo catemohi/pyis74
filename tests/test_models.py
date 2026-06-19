@@ -6,7 +6,7 @@ from decimal import Decimal
 import pytest
 
 from pyis74.exceptions import IS74APIError
-from pyis74.models import Balance, MobileToken, PhoneConfirmationCheck, parse_datetime
+from pyis74.models import Balance, LkToken, MobileToken, PhoneConfirmationCheck, parse_datetime
 
 
 def test_mobile_token_from_json_object() -> None:
@@ -33,6 +33,13 @@ def test_mobile_token_accepts_lower_case_token_field() -> None:
     token = MobileToken.from_json_object({"token": "mobile-token"})
 
     assert token.token == "mobile-token"
+
+
+def test_lk_token_from_json_object() -> None:
+    """Проверяет разбор CRM/LK token."""
+    token = LkToken.from_json_object({"TOKEN": "lk-token"})
+
+    assert token.token == "lk-token"
 
 
 def test_phone_confirmation_check_parses_addresses() -> None:

@@ -6,7 +6,8 @@ import uuid
 from typing import TYPE_CHECKING, Final
 
 from pyis74 import endpoints
-from pyis74.models import MobileToken, PhoneConfirmationCheck, PhoneConfirmationStart
+from pyis74.exceptions import IS74AuthRequiredError
+from pyis74.models import LkToken, MobileToken, PhoneConfirmationCheck, PhoneConfirmationStart
 from pyis74.options import ClientRequestOptions
 from pyis74.types import normalize_json_object
 
@@ -44,6 +45,32 @@ class AuthAPI:
         )
         token = MobileToken.from_json_object(normalize_json_object(payload))
         self._client.set_mobile_token(token.token)
+        return token
+
+    async def get_lk_token(self, *, buyer_id: int = 1) -> LkToken:
+        """Получает CRM/LK token по текущему mobile access token.
+
+        Args:
+            buyer_id: Идентификатор buyer для `td-crm.is74.ru/api/auth-lk`.
+
+        Returns:
+            CRM/LK access token.
+
+        Raises:
+            IS74AuthRequiredError: В клиенте нет mobile access token.
+        """
+        mobile_token = self._client.mobile_token
+        if mobile_token is None:
+            msg = "Mobile access token is required to obtain LK token."
+            raise IS74AuthRequiredError(msg)
+
+        payload = await self._client.request(
+            "POST",
+            endpoints.CRM_AUTH_LK,
+            ClientRequestOptions(json_body={"buyerId": buyer_id, "token": mobile_token}),
+        )
+        token = LkToken.from_json_object(normalize_json_object(payload))
+        self._client.set_lk_token(token.token)
         return token
 
     async def request_phone_confirmation(
@@ -161,6 +188,17 @@ class SyncAuthAPI:
             Mobile access token.
         """
         return self._client._run(lambda client: client.auth.login_with_password(username, password))
+
+    def get_lk_token(self, *, buyer_id: int = 1) -> LkToken:
+        """Получает CRM/LK token по текущему mobile access token.
+
+        Args:
+            buyer_id: Идентификатор buyer для `td-crm.is74.ru/api/auth-lk`.
+
+        Returns:
+            CRM/LK access token.
+        """
+        return self._client._run(lambda client: client.auth.get_lk_token(buyer_id=buyer_id))
 
     def request_phone_confirmation(
         self,

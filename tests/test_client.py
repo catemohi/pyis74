@@ -83,6 +83,47 @@ async def test_async_client_request_mobile_requires_token() -> None:
             await client.request_mobile("GET", "/user/user")
 
 
+@pytest.mark.asyncio
+async def test_async_client_request_lk_uses_stored_token(httpx_mock: HTTPXMock) -> None:
+    """Проверяет подстановку сохраненного CRM/LK access token."""
+    httpx_mock.add_response(
+        url="https://td-crm.is74.ru/api/user/history",
+        json={"data": []},
+    )
+
+    async with IS74Async(backoff_factor=0) as client:
+        client.set_lk_token("lk-token")
+        payload = await client.request_lk("GET", "https://td-crm.is74.ru/api/user/history")
+
+    assert payload == {"data": []}
+    request = httpx_mock.get_request()
+    assert request is not None
+    assert request.headers["authorization"] == "Bearer lk-token"
+
+
+@pytest.mark.asyncio
+async def test_async_client_request_lk_can_obtain_lk_token(httpx_mock: HTTPXMock) -> None:
+    """Проверяет автоматическое получение CRM/LK token по mobile token."""
+    httpx_mock.add_response(
+        method="POST",
+        url="https://td-crm.is74.ru/api/auth-lk",
+        json={"TOKEN": "lk-token"},
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://td-crm.is74.ru/api/user/history",
+        json={"data": []},
+    )
+
+    async with IS74Async(backoff_factor=0, mobile_token="mobile-token") as client:
+        payload = await client.request_lk("GET", "https://td-crm.is74.ru/api/user/history")
+
+    assert payload == {"data": []}
+    assert client.lk_token == "lk-token"
+    requests = httpx_mock.get_requests()
+    assert requests[1].headers["authorization"] == "Bearer lk-token"
+
+
 def test_sync_client_request(httpx_mock: HTTPXMock) -> None:
     """Проверяет синхронную обертку клиента."""
     httpx_mock.add_response(url="https://api.is74.ru/user/user", json={"USER_ID": 42})

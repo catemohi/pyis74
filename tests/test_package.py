@@ -18,6 +18,7 @@ def test_package_exports_core_client() -> None:
 def test_package_exports_account_models() -> None:
     """Проверяет, что пакет экспортирует модели auth/account."""
     assert pyis74.MobileToken is not None
+    assert pyis74.LkToken is not None
     assert pyis74.AccountSummary is not None
     assert pyis74.Balance is not None
     assert pyis74.IS74AuthRequiredError is not None

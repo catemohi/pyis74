@@ -95,6 +95,10 @@ class DomofonAPI:
             IS74APIError: У реле нет ссылки открытия и нет `RELAY_ID`.
         """
         target = relay.open_url or build_domofon_open_url(relay)
+        if is_crm_open_url(target):
+            response = await self._client._request_lk_response("GET", target)
+            return build_open_result(response.status_code, response.text, response.content)
+
         options = ClientRequestOptions(
             params={"from": "app"} if should_add_from_app(target, from_app=from_app) else None
         )
@@ -269,6 +273,18 @@ def should_add_from_app(target: str, *, from_app: bool) -> bool:
         `True`, если параметр нужно добавить.
     """
     return from_app and target.startswith(str(endpoints.BaseUrl.API))
+
+
+def is_crm_open_url(target: str) -> bool:
+    """Проверяет, что ссылка открытия относится к CRM API.
+
+    Args:
+        target: URL открытия реле.
+
+    Returns:
+        `True`, если ссылка начинается с `td-crm.is74.ru`.
+    """
+    return target.startswith(str(endpoints.BaseUrl.CRM))
 
 
 def build_open_result(status_code: int, response_text: str, content: bytes) -> DomofonOpenResult:

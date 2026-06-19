@@ -50,6 +50,44 @@ class MobileToken:
 
 
 @dataclass(frozen=True, slots=True)
+class LkToken:
+    """Access token личного кабинета CRM API.
+
+    Args:
+        token: Bearer-токен CRM/LK API.
+        expires_at: Время истечения токена, если API его вернул.
+        raw: Исходный JSON-ответ API.
+    """
+
+    token: str
+    expires_at: datetime | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает модель CRM/LK token из JSON-ответа API.
+
+        Args:
+            payload: JSON-ответ `td-crm.is74.ru/api/auth-lk`.
+
+        Returns:
+            Модель CRM/LK token.
+
+        Raises:
+            IS74APIError: В ответе нет строкового поля `TOKEN` или `token`.
+        """
+        token = get_str(payload, "TOKEN") or get_str(payload, "token")
+        if token is None:
+            msg = "IS74 LK auth response does not contain TOKEN or token."
+            raise IS74APIError(msg, payload)
+        return cls(
+            token=token,
+            expires_at=parse_datetime(get_str(payload, "ACCESS_END")),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class PhoneConfirmationStart:
     """Результат запроса кода подтверждения по телефону.
 
