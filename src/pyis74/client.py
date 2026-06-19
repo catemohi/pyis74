@@ -7,10 +7,13 @@ from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass, field, replace
 from types import TracebackType
 
+import httpx
+
 from pyis74.account import AccountAPI, SyncAccountAPI
 from pyis74.auth import AuthAPI, SyncAuthAPI
+from pyis74.domofon import DomofonAPI, SyncDomofonAPI
 from pyis74.endpoints import join_url
-from pyis74.exceptions import IS74AuthRequiredError, IS74Error
+from pyis74.exceptions import IS74AuthRequiredError, IS74Error, IS74TransportError
 from pyis74.options import ClientRequestOptions
 from pyis74.transport import (
     DEFAULT_BACKOFF_FACTOR,
@@ -19,7 +22,7 @@ from pyis74.transport import (
     IS74Transport,
     RequestOptions,
 )
-from pyis74.types import JsonValue
+from pyis74.types import JsonValue, normalize_json_value
 
 
 class IS74Async:
@@ -52,6 +55,7 @@ class IS74Async:
         self._mobile_token = mobile_token
         self.auth: AuthAPI = AuthAPI(self)
         self.account: AccountAPI = AccountAPI(self)
+        self.domofon: DomofonAPI = DomofonAPI(self)
 
     async def __aenter__(self) -> IS74Async:
         """Возвращает асинхронный клиент для context manager."""
@@ -104,6 +108,21 @@ class IS74Async:
         Returns:
             Нормализованный JSON-ответ.
         """
+        response = await self._request_response(method, target, options)
+        try:
+            payload: object = response.json()
+        except ValueError as error:
+            msg = f"Invalid JSON response for {method.upper()} {response.url}."
+            raise IS74TransportError(msg) from error
+        return normalize_json_value(payload)
+
+    async def _request_response(
+        self,
+        method: str,
+        target: str,
+        options: ClientRequestOptions | None = None,
+    ) -> httpx.Response:
+        """Выполняет низкоуровневый HTTP-запрос к API IS74."""
         request_options = options or ClientRequestOptions()
         url = join_url(request_options.base_url, target)
         headers = dict(request_options.headers or {})
@@ -117,7 +136,7 @@ class IS74Async:
             form=request_options.form,
             content=request_options.content,
         )
-        return await self._transport.request_json(method, url, transport_options)
+        return await self._transport.request(method, url, transport_options)
 
     async def request_mobile(
         self,
@@ -145,6 +164,24 @@ class IS74Async:
             raise IS74AuthRequiredError(msg)
         return await self.request(method, target, replace(request_options, auth_token=token))
 
+    async def _request_mobile_response(
+        self,
+        method: str,
+        target: str,
+        options: ClientRequestOptions | None = None,
+    ) -> httpx.Response:
+        """Выполняет HTTP-запрос с mobile access token."""
+        request_options = options or ClientRequestOptions()
+        token = request_options.auth_token or self._mobile_token
+        if token is None:
+            msg = "Mobile access token is required for this IS74 request."
+            raise IS74AuthRequiredError(msg)
+        return await self._request_response(
+            method,
+            target,
+            replace(request_options, auth_token=token),
+        )
+
 
 @dataclass(slots=True, kw_only=True)
 class IS74:
@@ -156,11 +193,13 @@ class IS74:
     mobile_token: str | None = None
     auth: SyncAuthAPI = field(init=False)
     account: SyncAccountAPI = field(init=False)
+    domofon: SyncDomofonAPI = field(init=False)
 
     def __post_init__(self) -> None:
         """Инициализирует синхронные домены API."""
         self.auth = SyncAuthAPI(self)
         self.account = SyncAccountAPI(self)
+        self.domofon = SyncDomofonAPI(self)
 
     def request(
         self,

@@ -21,3 +21,9 @@ def test_package_exports_account_models() -> None:
     assert pyis74.AccountSummary is not None
     assert pyis74.Balance is not None
     assert pyis74.IS74AuthRequiredError is not None
+
+
+def test_package_exports_domofon_models() -> None:
+    """Проверяет, что пакет экспортирует модели домофона."""
+    assert pyis74.DomofonRelay is not None
+    assert pyis74.DomofonOpenResult is not None

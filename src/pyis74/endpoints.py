@@ -64,6 +64,7 @@ USER_ADDRESS: Final = join_url(BaseUrl.API, "/user/address")
 USER_BALANCE: Final = join_url(BaseUrl.API, "/user/balance")
 
 DOMOFON_RELAYS: Final = join_url(BaseUrl.API, "/domofon/relays")
+DOMOFON_RELAY_OPEN_TEMPLATE: Final = join_url(BaseUrl.API, "/domofon/relays/{relay_id}/open")
 
 CAMS_SELF_WITH_GROUP: Final = join_url(BaseUrl.CAMS, "/api/self-cams-with-group")
 CAMS_GET_GROUP: Final = join_url(BaseUrl.CAMS, "/api/get-group/")

@@ -8,7 +8,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Self
 
 from pyis74.exceptions import IS74APIError
-from pyis74.types import JsonObject
+from pyis74.types import JsonObject, JsonValue
 
 
 @dataclass(frozen=True, slots=True)
@@ -367,6 +367,265 @@ class AccountSummary:
     balance: Balance
 
 
+@dataclass(frozen=True, slots=True)
+class DomofonLinks:
+    """Ссылки действий домофонного реле.
+
+    Args:
+        open_url: URL открытия двери, калитки или ворот.
+        raw: Исходный JSON-объект ссылок.
+    """
+
+    open_url: str | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает ссылки домофонного реле из JSON.
+
+        Args:
+            payload: JSON-объект `LINKS`.
+
+        Returns:
+            Ссылки действий.
+        """
+        return cls(open_url=get_str(payload, "open"), raw=payload)
+
+
+@dataclass(frozen=True, slots=True)
+class DomofonOpener:
+    """Параметры opener для домофонного реле.
+
+    Args:
+        mac: MAC-адрес контроллера.
+        relay_id: Идентификатор реле.
+        relay_num: Номер реле на контроллере.
+        type: Тип opener из API, например `api` или `crm`.
+        raw: Исходный JSON-объект opener.
+    """
+
+    mac: str | None
+    relay_id: int | None
+    relay_num: int | None
+    type: str | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает opener из JSON.
+
+        Args:
+            payload: JSON-объект `OPENER`.
+
+        Returns:
+            Параметры opener.
+        """
+        return cls(
+            mac=get_str(payload, "mac"),
+            relay_id=get_int(payload, "relay_id"),
+            relay_num=get_int(payload, "relay_num"),
+            type=get_str(payload, "type"),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class DomofonQrValue:
+    """Параметры генерации QR-кода для домофона.
+
+    Args:
+        length: Длина кода.
+        salt: Salt из API.
+        step: Шаг обновления.
+        window: Окно допустимости.
+        raw: Исходный JSON-объект value.
+    """
+
+    length: int | None
+    salt: str | None
+    step: int | None
+    window: int | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает параметры QR-кода из JSON.
+
+        Args:
+            payload: JSON-объект `QR_OPTIONS.value`.
+
+        Returns:
+            Параметры генерации QR-кода.
+        """
+        return cls(
+            length=get_int(payload, "length"),
+            salt=get_str(payload, "salt"),
+            step=get_int(payload, "step"),
+            window=get_int(payload, "window"),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class DomofonQrOptions:
+    """QR-настройки домофонного реле.
+
+    Args:
+        is_private: Признак приватного QR.
+        last_change_date: Дата последнего изменения из API.
+        name: Имя настройки.
+        value: Параметры генерации QR-кода.
+        raw: Исходный JSON-объект `QR_OPTIONS`.
+    """
+
+    is_private: bool | None
+    last_change_date: str | None
+    name: str | None
+    value: DomofonQrValue | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает QR-настройки из JSON.
+
+        Args:
+            payload: JSON-объект `QR_OPTIONS`.
+
+        Returns:
+            QR-настройки.
+        """
+        value_payload = get_json_object(payload, "value")
+        return cls(
+            is_private=get_bool(payload, "isPrivate"),
+            last_change_date=get_str(payload, "lastChangeDate"),
+            name=get_str(payload, "name"),
+            value=(
+                DomofonQrValue.from_json_object(value_payload)
+                if value_payload is not None
+                else None
+            ),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class DomofonRelay:
+    """Домофонное реле, доступное пользователю.
+
+    Args:
+        relay_id: Идентификатор реле.
+        relay_descr: Описание реле.
+        relay_type: Тип реле, например главный вход, калитка или ворота.
+        address: Человекочитаемый адрес.
+        building_id: Идентификатор дома.
+        entrance_uid: UID подъезда.
+        has_video: Признак доступного видео.
+        image_url: URL snapshot-изображения.
+        is_main: Признак основного входа.
+        smart_intercom: Признак умного домофона.
+        mac_addr: MAC-адрес контроллера.
+        porch_num: Номер подъезда.
+        num_building: Номер дома из API.
+        status_code: Код статуса.
+        status_text: Текст статуса.
+        links: Ссылки действий.
+        opener: Параметры opener.
+        qr_options: QR-настройки.
+        raw: Исходный JSON-ответ API.
+    """
+
+    relay_id: int | None
+    relay_descr: str | None
+    relay_type: str | None
+    address: str | None
+    building_id: int | None
+    entrance_uid: str | None
+    has_video: bool | None
+    image_url: str | None
+    is_main: bool | None
+    smart_intercom: bool | None
+    mac_addr: str | None
+    porch_num: str | None
+    num_building: str | None
+    status_code: str | None
+    status_text: str | None
+    links: DomofonLinks | None
+    opener: DomofonOpener | None
+    qr_options: DomofonQrOptions | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает домофонное реле из JSON.
+
+        Args:
+            payload: JSON-объект реле.
+
+        Returns:
+            Домофонное реле.
+        """
+        links_payload = get_json_object(payload, "LINKS")
+        opener_payload = get_json_object(payload, "OPENER")
+        qr_options_payload = get_json_object(payload, "QR_OPTIONS")
+        return cls(
+            relay_id=get_int(payload, "RELAY_ID"),
+            relay_descr=get_str(payload, "RELAY_DESCR"),
+            relay_type=get_str(payload, "RELAY_TYPE"),
+            address=get_str(payload, "ADDRESS"),
+            building_id=get_int(payload, "BUILDING_ID"),
+            entrance_uid=get_str(payload, "ENTRANCE_UID"),
+            has_video=get_bool(payload, "HAS_VIDEO"),
+            image_url=get_str(payload, "IMAGE_URL"),
+            is_main=get_bool(payload, "IS_MAIN"),
+            smart_intercom=get_bool(payload, "SMART_INTERCOM"),
+            mac_addr=get_str(payload, "MAC_ADDR"),
+            porch_num=get_str(payload, "PORCH_NUM"),
+            num_building=get_str(payload, "NUM_BUILDING"),
+            status_code=get_str(payload, "STATUS_CODE"),
+            status_text=get_str(payload, "STATUS_TEXT"),
+            links=(
+                DomofonLinks.from_json_object(links_payload) if links_payload is not None else None
+            ),
+            opener=(
+                DomofonOpener.from_json_object(opener_payload)
+                if opener_payload is not None
+                else None
+            ),
+            qr_options=(
+                DomofonQrOptions.from_json_object(qr_options_payload)
+                if qr_options_payload is not None
+                else None
+            ),
+            raw=payload,
+        )
+
+    @property
+    def open_url(self) -> str | None:
+        """Возвращает URL открытия из `LINKS.open`.
+
+        Returns:
+            URL открытия или `None`.
+        """
+        if self.links is None:
+            return None
+        return self.links.open_url
+
+
+@dataclass(frozen=True, slots=True)
+class DomofonOpenResult:
+    """Результат открытия домофонного реле.
+
+    Args:
+        status_code: HTTP-код успешного ответа.
+        payload: JSON-ответ, если API вернул JSON.
+        response_text: Текст ответа API.
+    """
+
+    status_code: int
+    payload: JsonValue | None
+    response_text: str
+
+
 def get_str(payload: JsonObject, key: str) -> str | None:
     """Возвращает строковое поле из JSON-объекта.
 
@@ -380,6 +639,30 @@ def get_str(payload: JsonObject, key: str) -> str | None:
     value = payload.get(key)
     if isinstance(value, str):
         return value
+    return None
+
+
+def get_bool(payload: JsonObject, key: str) -> bool | None:
+    """Возвращает булево поле из JSON-объекта.
+
+    Args:
+        payload: JSON-объект.
+        key: Ключ поля.
+
+    Returns:
+        Булево значение или `None`.
+    """
+    value = payload.get(key)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "y"}:
+            return True
+        if normalized in {"0", "false", "no", "n"}:
+            return False
     return None
 
 

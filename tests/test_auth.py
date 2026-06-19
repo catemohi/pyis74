@@ -62,7 +62,7 @@ async def test_check_phone_confirmation_sends_json(httpx_mock: HTTPXMock) -> Non
         url=endpoints.AUTH_CONFIRM,
         json={
             "authId": "auth-1",
-            "addresses": [{"USER_ID": str(USER_ID), "ADDRESS": "Челябинск, Ленина 1"}],
+            "addresses": [{"USER_ID": str(USER_ID), "ADDRESS": "Тестоград, ул. Примерная, 1"}],
         },
     )
 

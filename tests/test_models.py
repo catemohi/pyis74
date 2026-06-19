@@ -41,8 +41,8 @@ def test_phone_confirmation_check_parses_addresses() -> None:
         {
             "authId": "auth-1",
             "addresses": [
-                {"USER_ID": "100", "ADDRESS": "Челябинск, Ленина 1"},
-                {"userId": 101, "address": "Челябинск, Кирова 2"},
+                {"USER_ID": "100", "ADDRESS": "Тестоград, ул. Примерная, 1"},
+                {"userId": 101, "address": "Тестоград, ул. Учебная, 2"},
                 "ignored",
             ],
         }
@@ -50,7 +50,7 @@ def test_phone_confirmation_check_parses_addresses() -> None:
 
     assert result.auth_id == "auth-1"
     assert [address.user_id for address in result.addresses] == [100, 101]
-    assert result.addresses[0].address == "Челябинск, Ленина 1"
+    assert result.addresses[0].address == "Тестоград, ул. Примерная, 1"
 
 
 def test_balance_from_json_object() -> None:
