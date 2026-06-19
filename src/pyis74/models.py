@@ -1,0 +1,476 @@
+"""Типизированные модели ответов API IS74."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from decimal import Decimal, InvalidOperation
+from typing import Self
+
+from pyis74.exceptions import IS74APIError
+from pyis74.types import JsonObject
+
+
+@dataclass(frozen=True, slots=True)
+class MobileToken:
+    """Mobile access token API IS74.
+
+    Args:
+        token: Bearer-токен мобильного API.
+        expires_at: Время истечения токена, если API его вернул.
+        raw: Исходный JSON-ответ API.
+    """
+
+    token: str
+    expires_at: datetime | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает модель токена из JSON-ответа API.
+
+        Args:
+            payload: JSON-ответ auth endpoint.
+
+        Returns:
+            Модель токена.
+
+        Raises:
+            IS74APIError: В ответе нет строкового поля `TOKEN`.
+        """
+        token = get_str(payload, "TOKEN")
+        if token is None:
+            msg = "IS74 auth response does not contain TOKEN."
+            raise IS74APIError(msg, payload)
+        return cls(
+            token=token,
+            expires_at=parse_datetime(get_str(payload, "ACCESS_END")),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class PhoneConfirmationStart:
+    """Результат запроса кода подтверждения по телефону.
+
+    Args:
+        device_id: Идентификатор устройства, использованный в auth flow.
+        auth_id: Идентификатор auth-сессии, если API вернул его на этом шаге.
+        raw: Исходный JSON-ответ API.
+    """
+
+    device_id: str
+    auth_id: str | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject, *, device_id: str) -> Self:
+        """Создает результат старта телефонной авторизации.
+
+        Args:
+            payload: JSON-ответ API.
+            device_id: Идентификатор устройства, отправленный в API.
+
+        Returns:
+            Результат старта подтверждения.
+        """
+        return cls(device_id=device_id, auth_id=get_str(payload, "authId"), raw=payload)
+
+
+@dataclass(frozen=True, slots=True)
+class AddressCandidate:
+    """Адрес, доступный для выбора после подтверждения телефона.
+
+    Args:
+        user_id: Идентификатор пользователя/адреса для получения токена.
+        address: Человекочитаемый адрес, если API его вернул.
+        raw: Исходный JSON-объект адреса.
+    """
+
+    user_id: int | None
+    address: str | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает кандидата адреса из JSON.
+
+        Args:
+            payload: JSON-объект адреса.
+
+        Returns:
+            Модель адреса-кандидата.
+        """
+        return cls(
+            user_id=get_int(payload, "USER_ID") or get_int(payload, "userId"),
+            address=get_str(payload, "ADDRESS") or get_str(payload, "address"),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class PhoneConfirmationCheck:
+    """Результат проверки кода подтверждения.
+
+    Args:
+        auth_id: Идентификатор auth-сессии.
+        addresses: Адреса, по которым можно получить access token.
+        raw: Исходный JSON-ответ API.
+    """
+
+    auth_id: str
+    addresses: tuple[AddressCandidate, ...]
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает результат проверки кода из JSON.
+
+        Args:
+            payload: JSON-ответ API.
+
+        Returns:
+            Результат проверки кода.
+
+        Raises:
+            IS74APIError: В ответе нет строкового поля `authId`.
+        """
+        auth_id = get_str(payload, "authId")
+        if auth_id is None:
+            msg = "IS74 phone confirmation response does not contain authId."
+            raise IS74APIError(msg, payload)
+        return cls(
+            auth_id=auth_id,
+            addresses=tuple(
+                AddressCandidate.from_json_object(address)
+                for address in get_json_object_list(payload, "addresses")
+            ),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ServiceStatus:
+    """Статус сервисов IS74 для текущего пользователя.
+
+    Args:
+        status: Код статуса.
+        description: Описание статуса.
+        title: Заголовок статуса.
+        deep_link: Deep link из ответа API.
+        deep_link_text: Текст deep link.
+        type_button: Тип кнопки из ответа API.
+        raw: Исходный JSON-ответ API.
+    """
+
+    status: str | None
+    description: str | None
+    title: str | None
+    deep_link: str | None
+    deep_link_text: str | None
+    type_button: str | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает статус сервиса из JSON.
+
+        Args:
+            payload: JSON-ответ API.
+
+        Returns:
+            Статус сервиса.
+        """
+        return cls(
+            status=get_str(payload, "status"),
+            description=get_str(payload, "description"),
+            title=get_str(payload, "title"),
+            deep_link=get_str(payload, "deep_link"),
+            deep_link_text=get_str(payload, "deep_link_text"),
+            type_button=get_str(payload, "type_button"),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class UserInfo:
+    """Информация о пользователе IS74.
+
+    Args:
+        user_id: Идентификатор пользователя.
+        full_name: Полное имя.
+        short_name: Короткое имя.
+        login: Логин.
+        account_number: Номер лицевого счета.
+        birth_date: Дата рождения из ответа API.
+        raw: Исходный JSON-ответ API.
+    """
+
+    user_id: int | None
+    full_name: str | None
+    short_name: str | None
+    login: str | None
+    account_number: int | None
+    birth_date: str | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает пользователя из JSON.
+
+        Args:
+            payload: JSON-ответ API.
+
+        Returns:
+            Информация о пользователе.
+        """
+        return cls(
+            user_id=get_int(payload, "USER_ID"),
+            full_name=get_str(payload, "FULL_NAME"),
+            short_name=get_str(payload, "shortFio"),
+            login=get_str(payload, "LOGIN"),
+            account_number=get_int(payload, "ACCOUNT_NUM"),
+            birth_date=get_str(payload, "BIRTH_DATE"),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class Address:
+    """Адрес установки услуг IS74.
+
+    Args:
+        user_id: Идентификатор пользователя.
+        flat_id: Идентификатор квартиры.
+        building_id: Идентификатор дома.
+        street_id: Идентификатор улицы.
+        city_id: Идентификатор города.
+        entrance_id: Идентификатор подъезда.
+        raw: Исходный JSON-ответ API.
+    """
+
+    user_id: int | None
+    flat_id: int | None
+    building_id: int | None
+    street_id: int | None
+    city_id: int | None
+    entrance_id: int | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает адрес из JSON.
+
+        Args:
+            payload: JSON-ответ API.
+
+        Returns:
+            Адрес установки услуг.
+        """
+        return cls(
+            user_id=get_int(payload, "USER_ID"),
+            flat_id=get_int(payload, "FLAT_ID"),
+            building_id=get_int(payload, "BUILDING_ID"),
+            street_id=get_int(payload, "STREET_ID"),
+            city_id=get_int(payload, "CITY_ID"),
+            entrance_id=get_int(payload, "PODJEZD_ID"),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class NextPayment:
+    """Информация о следующем платеже.
+
+    Args:
+        amount: Сумма следующего платежа.
+        text: Описание платежа.
+        raw: Исходный JSON-объект платежа.
+    """
+
+    amount: Decimal | None
+    text: str | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает информацию о следующем платеже из JSON.
+
+        Args:
+            payload: JSON-объект платежа.
+
+        Returns:
+            Информация о следующем платеже.
+        """
+        return cls(amount=get_decimal(payload, "pay"), text=get_str(payload, "text"), raw=payload)
+
+
+@dataclass(frozen=True, slots=True)
+class Balance:
+    """Баланс лицевого счета IS74.
+
+    Args:
+        balance: Текущий баланс.
+        next_payment: Информация о следующем платеже.
+        debt: Задолженность, если API ее вернул.
+        blocked: Текст или код блокировки, если API его вернул.
+        date_delay_lock: Дата отложенной блокировки.
+        raw: Исходный JSON-ответ API.
+    """
+
+    balance: Decimal | None
+    next_payment: NextPayment | None
+    debt: Decimal | None
+    blocked: str | None
+    date_delay_lock: str | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает баланс из JSON.
+
+        Args:
+            payload: JSON-ответ API.
+
+        Returns:
+            Баланс лицевого счета.
+        """
+        next_payment_payload = get_json_object(payload, "nextPayment")
+        return cls(
+            balance=get_decimal(payload, "balance"),
+            next_payment=(
+                NextPayment.from_json_object(next_payment_payload)
+                if next_payment_payload is not None
+                else None
+            ),
+            debt=get_decimal(payload, "debt"),
+            blocked=get_str(payload, "blocked"),
+            date_delay_lock=get_str(payload, "dateDelayLock"),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class AccountSummary:
+    """Сводная информация по аккаунту IS74.
+
+    Args:
+        service_status: Статус сервисов.
+        user: Информация о пользователе.
+        address: Адрес установки услуг.
+        balance: Баланс лицевого счета.
+    """
+
+    service_status: ServiceStatus
+    user: UserInfo
+    address: Address
+    balance: Balance
+
+
+def get_str(payload: JsonObject, key: str) -> str | None:
+    """Возвращает строковое поле из JSON-объекта.
+
+    Args:
+        payload: JSON-объект.
+        key: Ключ поля.
+
+    Returns:
+        Строка или `None`.
+    """
+    value = payload.get(key)
+    if isinstance(value, str):
+        return value
+    return None
+
+
+def get_int(payload: JsonObject, key: str) -> int | None:
+    """Возвращает целочисленное поле из JSON-объекта.
+
+    Args:
+        payload: JSON-объект.
+        key: Ключ поля.
+
+    Returns:
+        Целое число или `None`.
+    """
+    value = payload.get(key)
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return None
+
+
+def get_decimal(payload: JsonObject, key: str) -> Decimal | None:
+    """Возвращает числовое поле как `Decimal`.
+
+    Args:
+        payload: JSON-объект.
+        key: Ключ поля.
+
+    Returns:
+        `Decimal` или `None`.
+    """
+    value = payload.get(key)
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int | float | str):
+        try:
+            return Decimal(str(value))
+        except InvalidOperation:
+            return None
+    return None
+
+
+def get_json_object(payload: JsonObject, key: str) -> JsonObject | None:
+    """Возвращает вложенный JSON-объект.
+
+    Args:
+        payload: JSON-объект.
+        key: Ключ поля.
+
+    Returns:
+        Вложенный JSON-объект или `None`.
+    """
+    value = payload.get(key)
+    if isinstance(value, dict):
+        return value
+    return None
+
+
+def get_json_object_list(payload: JsonObject, key: str) -> tuple[JsonObject, ...]:
+    """Возвращает список вложенных JSON-объектов.
+
+    Args:
+        payload: JSON-объект.
+        key: Ключ поля.
+
+    Returns:
+        Кортеж JSON-объектов.
+    """
+    value = payload.get(key)
+    if not isinstance(value, list):
+        return ()
+    return tuple(item for item in value if isinstance(item, dict))
+
+
+def parse_datetime(value: str | None) -> datetime | None:
+    """Парсит дату API IS74 в timezone-aware `datetime`.
+
+    Args:
+        value: Строковое значение даты.
+
+    Returns:
+        `datetime` или `None`.
+    """
+    if value is None:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed

@@ -19,6 +19,37 @@
 - Runtime-зависимости минимальны.
 - Публичный API будет типизирован.
 
+## Пример
+
+```python
+import asyncio
+
+from pyis74 import IS74Async
+
+
+async def main() -> None:
+    async with IS74Async() as client:
+        await client.auth.login_with_password("login", "password")
+        summary = await client.account.get_summary()
+        print(summary.user.full_name)
+        print(summary.balance.balance)
+
+
+asyncio.run(main())
+```
+
+Синхронный клиент хранит полученный mobile token внутри экземпляра:
+
+```python
+from pyis74 import IS74
+
+
+client = IS74()
+client.auth.login_with_password("login", "password")
+balance = client.account.get_balance()
+print(balance.balance)
+```
+
 ## Разработка
 
 ```bash
@@ -33,4 +64,3 @@ uv run pytest
 
 До версии `1.0.0` публичный API может изменяться. Breaking changes будут отражаться
 в minor-релизах серии `0.x`.
-

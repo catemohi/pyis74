@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Coroutine
-from dataclasses import dataclass
+from collections.abc import Awaitable, Callable, Coroutine
+from dataclasses import dataclass, field, replace
 from types import TracebackType
 
-from pyis74.endpoints import BaseUrl, join_url
-from pyis74.exceptions import IS74Error
+from pyis74.account import AccountAPI, SyncAccountAPI
+from pyis74.auth import AuthAPI, SyncAuthAPI
+from pyis74.endpoints import join_url
+from pyis74.exceptions import IS74AuthRequiredError, IS74Error
+from pyis74.options import ClientRequestOptions
 from pyis74.transport import (
     DEFAULT_BACKOFF_FACTOR,
     DEFAULT_MAX_RETRIES,
@@ -16,30 +19,7 @@ from pyis74.transport import (
     IS74Transport,
     RequestOptions,
 )
-from pyis74.types import JsonValue, QueryParams
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ClientRequestOptions:
-    """Параметры запроса публичного клиента.
-
-    Args:
-        base_url: Базовый URL для относительного endpoint.
-        auth_token: Bearer-токен авторизации.
-        headers: Дополнительные HTTP-заголовки.
-        params: Query-параметры.
-        json_body: JSON-тело запроса.
-        form: Form-urlencoded данные запроса.
-        content: Текстовое или бинарное тело запроса.
-    """
-
-    base_url: BaseUrl | str = BaseUrl.API
-    auth_token: str | None = None
-    headers: dict[str, str] | None = None
-    params: QueryParams | None = None
-    json_body: JsonValue | None = None
-    form: dict[str, str] | None = None
-    content: str | bytes | None = None
+from pyis74.types import JsonValue
 
 
 class IS74Async:
@@ -52,6 +32,7 @@ class IS74Async:
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
         backoff_factor: float = DEFAULT_BACKOFF_FACTOR,
+        mobile_token: str | None = None,
     ) -> None:
         """Создает асинхронный клиент.
 
@@ -60,6 +41,7 @@ class IS74Async:
             timeout: Таймаут запросов в секундах для собственного transport.
             max_retries: Количество повторных попыток после первого запроса.
             backoff_factor: Базовая задержка между повторными попытками.
+            mobile_token: Существующий mobile access token для запросов аккаунта.
         """
         self._owns_transport = transport is None
         self._transport = transport or IS74Transport(
@@ -67,6 +49,9 @@ class IS74Async:
             max_retries=max_retries,
             backoff_factor=backoff_factor,
         )
+        self._mobile_token = mobile_token
+        self.auth: AuthAPI = AuthAPI(self)
+        self.account: AccountAPI = AccountAPI(self)
 
     async def __aenter__(self) -> IS74Async:
         """Возвращает асинхронный клиент для context manager."""
@@ -85,6 +70,23 @@ class IS74Async:
         """Закрывает transport, если он был создан самим клиентом."""
         if self._owns_transport:
             await self._transport.aclose()
+
+    @property
+    def mobile_token(self) -> str | None:
+        """Возвращает текущий mobile access token."""
+        return self._mobile_token
+
+    def set_mobile_token(self, token: str) -> None:
+        """Сохраняет mobile access token в клиенте.
+
+        Args:
+            token: Bearer-токен мобильного API.
+        """
+        self._mobile_token = token
+
+    def clear_mobile_token(self) -> None:
+        """Удаляет mobile access token из клиента."""
+        self._mobile_token = None
 
     async def request(
         self,
@@ -117,14 +119,48 @@ class IS74Async:
         )
         return await self._transport.request_json(method, url, transport_options)
 
+    async def request_mobile(
+        self,
+        method: str,
+        target: str,
+        options: ClientRequestOptions | None = None,
+    ) -> JsonValue:
+        """Выполняет JSON-запрос с mobile access token.
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+        Args:
+            method: HTTP-метод.
+            target: Относительный endpoint или абсолютный URL.
+            options: Параметры клиентского запроса.
+
+        Returns:
+            Нормализованный JSON-ответ.
+
+        Raises:
+            IS74AuthRequiredError: В клиенте нет mobile access token.
+        """
+        request_options = options or ClientRequestOptions()
+        token = request_options.auth_token or self._mobile_token
+        if token is None:
+            msg = "Mobile access token is required for this IS74 request."
+            raise IS74AuthRequiredError(msg)
+        return await self.request(method, target, replace(request_options, auth_token=token))
+
+
+@dataclass(slots=True, kw_only=True)
 class IS74:
     """Синхронная обертка над `IS74Async` для простых сценариев."""
 
     timeout: float = DEFAULT_TIMEOUT
     max_retries: int = DEFAULT_MAX_RETRIES
     backoff_factor: float = DEFAULT_BACKOFF_FACTOR
+    mobile_token: str | None = None
+    auth: SyncAuthAPI = field(init=False)
+    account: SyncAccountAPI = field(init=False)
+
+    def __post_init__(self) -> None:
+        """Инициализирует синхронные домены API."""
+        self.auth = SyncAuthAPI(self)
+        self.account = SyncAccountAPI(self)
 
     def request(
         self,
@@ -145,21 +181,61 @@ class IS74:
         Raises:
             IS74Error: Метод вызван из уже запущенного event loop.
         """
-        coroutine = self._request_async(method, target, options)
-        return _run_sync(coroutine)
+        return self._run(lambda client: client.request(method, target, options))
 
-    async def _request_async(
+    def request_mobile(
         self,
         method: str,
         target: str,
-        options: ClientRequestOptions | None,
+        options: ClientRequestOptions | None = None,
     ) -> JsonValue:
+        """Выполняет синхронный JSON-запрос с mobile access token.
+
+        Args:
+            method: HTTP-метод.
+            target: Относительный endpoint или абсолютный URL.
+            options: Параметры клиентского запроса.
+
+        Returns:
+            Нормализованный JSON-ответ.
+
+        Raises:
+            IS74Error: Метод вызван из уже запущенного event loop.
+            IS74AuthRequiredError: В клиенте нет mobile access token.
+        """
+        return self._run(lambda client: client.request_mobile(method, target, options))
+
+    def set_mobile_token(self, token: str) -> None:
+        """Сохраняет mobile access token в клиенте.
+
+        Args:
+            token: Bearer-токен мобильного API.
+        """
+        self.mobile_token = token
+
+    def clear_mobile_token(self) -> None:
+        """Удаляет mobile access token из клиента."""
+        self.mobile_token = None
+
+    def _run[ResultT](self, action: Callable[[IS74Async], Awaitable[ResultT]]) -> ResultT:
+        """Запускает действие в одноразовом асинхронном клиенте."""
+        return _run_sync(self._run_async(action))
+
+    async def _run_async[ResultT](
+        self,
+        action: Callable[[IS74Async], Awaitable[ResultT]],
+    ) -> ResultT:
+        """Выполняет действие и синхронизирует mobile token обратно."""
         async with IS74Async(
             timeout=self.timeout,
             max_retries=self.max_retries,
             backoff_factor=self.backoff_factor,
+            mobile_token=self.mobile_token,
         ) as client:
-            return await client.request(method, target, options)
+            try:
+                return await action(client)
+            finally:
+                self.mobile_token = client.mobile_token
 
 
 def _run_sync[ResultT](coroutine: Coroutine[object, object, ResultT]) -> ResultT:

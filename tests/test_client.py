@@ -3,7 +3,7 @@
 import pytest
 from pytest_httpx import HTTPXMock
 
-from pyis74 import IS74, ClientRequestOptions, IS74Async, IS74Error
+from pyis74 import IS74, ClientRequestOptions, IS74Async, IS74AuthRequiredError, IS74Error
 from pyis74.endpoints import BaseUrl
 
 
@@ -41,6 +41,46 @@ async def test_async_client_uses_custom_base_url(httpx_mock: HTTPXMock) -> None:
         )
 
     assert payload == []
+
+
+@pytest.mark.asyncio
+async def test_async_client_request_mobile_uses_stored_token(httpx_mock: HTTPXMock) -> None:
+    """Проверяет подстановку сохраненного mobile access token."""
+    httpx_mock.add_response(url="https://api.is74.ru/user/user", json={"USER_ID": 42})
+
+    async with IS74Async(backoff_factor=0, mobile_token="mobile-token") as client:
+        payload = await client.request_mobile("GET", "/user/user")
+
+    assert payload == {"USER_ID": 42}
+    request = httpx_mock.get_request()
+    assert request is not None
+    assert request.headers["authorization"] == "Bearer mobile-token"
+
+
+@pytest.mark.asyncio
+async def test_async_client_request_mobile_can_override_token(httpx_mock: HTTPXMock) -> None:
+    """Проверяет явное переопределение токена для одного запроса."""
+    httpx_mock.add_response(url="https://api.is74.ru/user/user", json={"USER_ID": 42})
+
+    async with IS74Async(backoff_factor=0, mobile_token="stored-token") as client:
+        payload = await client.request_mobile(
+            "GET",
+            "/user/user",
+            ClientRequestOptions(auth_token="override-token"),
+        )
+
+    assert payload == {"USER_ID": 42}
+    request = httpx_mock.get_request()
+    assert request is not None
+    assert request.headers["authorization"] == "Bearer override-token"
+
+
+@pytest.mark.asyncio
+async def test_async_client_request_mobile_requires_token() -> None:
+    """Проверяет локальную ошибку при запросе mobile API без токена."""
+    async with IS74Async(backoff_factor=0) as client:
+        with pytest.raises(IS74AuthRequiredError):
+            await client.request_mobile("GET", "/user/user")
 
 
 def test_sync_client_request(httpx_mock: HTTPXMock) -> None:

@@ -13,3 +13,11 @@ def test_package_exports_core_client() -> None:
     """Проверяет, что пакет экспортирует core-клиенты."""
     assert pyis74.IS74 is not None
     assert pyis74.IS74Async is not None
+
+
+def test_package_exports_account_models() -> None:
+    """Проверяет, что пакет экспортирует модели auth/account."""
+    assert pyis74.MobileToken is not None
+    assert pyis74.AccountSummary is not None
+    assert pyis74.Balance is not None
+    assert pyis74.IS74AuthRequiredError is not None

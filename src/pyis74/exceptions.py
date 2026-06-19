@@ -51,6 +51,10 @@ class IS74AuthError(IS74HTTPError):
     """Ошибка авторизации или отклоненный API токен."""
 
 
+class IS74AuthRequiredError(IS74Error):
+    """Ошибка вызова метода, которому нужен mobile access token."""
+
+
 class IS74RateLimitError(IS74HTTPError):
     """Ошибка ограничения частоты запросов со стороны API."""
 
