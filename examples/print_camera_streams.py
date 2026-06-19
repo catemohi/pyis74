@@ -49,7 +49,7 @@ def print_camera_streams(
         show_private_fields: Печатать приватные поля вроде id, UUID, названия и адреса.
     """
     print(format_camera_header(index, camera, show_private_fields=show_private_fields))
-    for name, value in iter_stream_fields(camera):
+    for name, value in camera.streams.items():
         print(f"  {name}: {value}")
 
 
@@ -79,54 +79,6 @@ def format_camera_header(
         f"name={camera.name or 'без названия'}, "
         f"address={camera.address or 'адрес не указан'}"
     )
-
-
-def iter_stream_fields(camera: Camera) -> tuple[tuple[str, str], ...]:
-    """Возвращает stream-поля камеры.
-
-    Args:
-        camera: Камера.
-
-    Returns:
-        Кортеж пар `имя поля`, `URL`.
-    """
-    fields: list[tuple[str, str]] = []
-    if camera.media is not None:
-        if camera.media.hls is not None:
-            hls = camera.media.hls
-            if hls.live is not None:
-                append_stream_field(fields, "hls.live.main", hls.live.main)
-                append_stream_field(fields, "hls.live.low_latency", hls.live.low_latency)
-            append_stream_field(fields, "hls.archive", hls.archive)
-        if camera.media.mse is not None:
-            append_stream_field(fields, "mse.live", camera.media.mse.live)
-        if camera.media.snapshot is not None and camera.media.snapshot.live is not None:
-            snapshot = camera.media.snapshot.live
-            append_stream_field(fields, "snapshot.live.main", snapshot.main)
-            append_stream_field(fields, "snapshot.live.lossy", snapshot.lossy)
-
-    if camera.realtime_ws is not None:
-        append_stream_field(fields, "realtime_ws.combined", camera.realtime_ws.combined)
-        append_stream_field(fields, "realtime_ws.main", camera.realtime_ws.main)
-        append_stream_field(fields, "realtime_ws.sub", camera.realtime_ws.sub)
-
-    return tuple(fields)
-
-
-def append_stream_field(
-    fields: list[tuple[str, str]],
-    name: str,
-    value: str | None,
-) -> None:
-    """Добавляет stream-поле, если оно не пустое.
-
-    Args:
-        fields: Изменяемый список полей.
-        name: Имя stream-поля.
-        value: URL или `None`.
-    """
-    if value:
-        fields.append((name, value))
 
 
 def read_optional_int_env(name: str) -> int | None:

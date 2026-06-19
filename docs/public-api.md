@@ -501,6 +501,55 @@ API-реле и CRM-реле.
 Используйте его для проверки direct mobile API. Для CRM-реле основной путь -
 `open_relay_by_id()`.
 
+### `get_relay_cameras()`
+
+Возвращает домофонные реле вместе с камерами, найденными по `ENTRANCE_UID`.
+
+Зачем нужен этот метод: `limited-info-by-uuid` возвращает камеры по UUID подъезда, но
+batch-ответ не содержит исходный UUID запроса. Поэтому high-level метод сохраняет
+связку `relay -> cameras` сам и делает отдельный limited-info запрос для каждого
+уникального `ENTRANCE_UID`.
+
+Принимает: нет аргументов.
+
+Возвращает `tuple[DomofonRelayCameras, ...]`.
+
+```python
+relay_cameras = await client.domofon.get_relay_cameras()
+for item in relay_cameras:
+    print(item.relay.relay_id, len(item.cameras))
+```
+
+Пример данных `DomofonRelayCameras`:
+
+```json
+{
+  "relay": {
+    "relay_id": 900101,
+    "relay_type": "Калитка",
+    "entrance_uid": "00000000-0000-4000-8000-000000000001"
+  },
+  "cameras": [
+    {
+      "camera_id": 910201,
+      "uuid": "00000000-0000-4000-8000-000000000201",
+      "name": "Домофонная камера"
+    }
+  ]
+}
+```
+
+### `get_cameras_for_relays(relays)`
+
+То же, что `get_relay_cameras()`, но принимает уже загруженные реле. Метод полезен,
+если список реле уже получен раньше и не нужно повторять `GET /domofon/relays`.
+
+Принимает:
+
+- `relays: Iterable[DomofonRelay]`
+
+Возвращает `tuple[DomofonRelayCameras, ...]`.
+
 ## История: `client.history`
 
 ### `get_events(from_date=None, to_date=None, page=None, per_page=None)`
@@ -525,7 +574,7 @@ events = await client.history.get_events(
     per_page=20,
 )
 for event in events.events:
-    print(event.event_type, event.created_at)
+    print(event.kind, event.event_type, event.created_at)
 ```
 
 Пример данных:
@@ -537,6 +586,7 @@ for event in events.events:
       "create_date": "2026-06-19T10:15:00Z",
       "created_at": "2026-06-19T10:15:00+00:00",
       "event_type": "OPEN_API",
+      "kind": "open",
       "params": {
         "mac": "02:00:00:00:01:01",
         "address": "Тестоград, ул. Примерная, д. 10",
@@ -549,6 +599,45 @@ for event in events.events:
   "per_page": 20,
   "count": 1
 }
+```
+
+`HistoryEvent.kind` нормализует исходный `event_type` в одну из категорий:
+
+- `HistoryEventKind.OPEN` / `"open"` - события открытия;
+- `HistoryEventKind.CALL` / `"call"` - звонки;
+- `HistoryEventKind.OTHER` / `"other"` - остальные события.
+
+Также доступны быстрые признаки `event.is_open` и `event.is_call`.
+
+### `get_recent_activity(...)`
+
+Возвращает события текущей страницы, отфильтрованные как последние открытия и звонки.
+Метод получает страницу через `get_events()`, затем локально применяет
+`HistoryResponse.filter_events()`.
+
+Принимает те же параметры страницы и дат, что `get_events()`, плюс:
+
+- `event_types: Iterable[str]` - точные типы API, например `OPEN_API`.
+- `kinds: Iterable[HistoryEventKind | str]` - категории `open`, `call`, `other`.
+  По умолчанию `open` и `call`.
+- `with_images: bool | None` - если задано, фильтровать по наличию `image_link`.
+
+Возвращает `tuple[HistoryEvent, ...]`.
+
+```python
+activity = await client.history.get_recent_activity(per_page=20)
+for event in activity:
+    print(event.kind.value, event.event_type, event.create_date)
+```
+
+### `HistoryResponse.filter_events(...)`
+
+Фильтрует уже полученные события страницы без дополнительного HTTP-запроса.
+
+```python
+history = await client.history.get_events(per_page=50)
+open_events = history.filter_events(kinds=("open",))
+events_with_snapshots = history.filter_events(with_images=True)
 ```
 
 ## Камеры: `client.cameras`
@@ -687,6 +776,48 @@ print(len(content.groups), len(content.cameras))
       }
     }
   ]
+}
+```
+
+### `Camera.streams`
+
+У каждой модели `Camera` есть свойство `streams`, которое собирает разбросанные по
+ответу API stream URL в один объект `CameraStreams`.
+
+`CameraStreams` содержит поля:
+
+- `hls_live_main`
+- `hls_live_low_latency`
+- `hls_archive`
+- `mse_live`
+- `snapshot_live_main`
+- `snapshot_live_lossy`
+- `realtime_ws_combined`
+- `realtime_ws_main`
+- `realtime_ws_sub`
+
+Метод `items()` возвращает только непустые URL с устойчивыми именами полей. Свойство
+`has_any` показывает, есть ли хотя бы один URL.
+
+```python
+camera = content.cameras[0]
+for name, url in camera.streams.items():
+    print(name, url)
+```
+
+Пример данных:
+
+```json
+{
+  "hls_live_main": "https://example.invalid/hls/live.m3u8?token=stream-token-example",
+  "hls_live_low_latency": "https://example.invalid/hls/live.m3u8?realtime=1&token=stream-token-example",
+  "hls_archive": "https://example.invalid/hls/archive.m3u8?token=stream-token-example",
+  "mse_live": "wss://example.invalid/ws/mse?token=stream-token-example",
+  "snapshot_live_main": "https://example.invalid/snapshot.jpg?token=stream-token-example",
+  "snapshot_live_lossy": "https://example.invalid/snapshot_lossy.jpg?token=stream-token-example",
+  "realtime_ws_combined": "wss://example.invalid/ws/mse?token=stream-token-example",
+  "realtime_ws_main": "wss://example.invalid/ws/mse?token=stream-token-example&quality=main",
+  "realtime_ws_sub": "wss://example.invalid/ws/mse?token=stream-token-example&quality=sub"
 }
 ```
 

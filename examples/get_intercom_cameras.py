@@ -7,7 +7,7 @@ import asyncio
 from _common import authorize_client, read_bool_env
 
 from pyis74 import IS74Async
-from pyis74.models import Camera, DomofonRelay
+from pyis74.models import Camera, DomofonRelayCameras
 
 SHOW_PRIVATE_FIELDS_ENV = "IS74_SHOW_PRIVATE_CAMERA_FIELDS"
 
@@ -18,28 +18,78 @@ async def main() -> None:
 
     async with IS74Async() as client:
         await authorize_client(client)
-        relays = await client.domofon.get_relays()
-        entrance_uids = collect_entrance_uids(relays)
-        limited_info = await client.cameras.get_limited_info_by_uuids(entrance_uids)
+        relay_cameras = await client.domofon.get_relay_cameras()
 
-    print(f"Relays: {len(relays)}")
-    print(f"Relays with ENTRANCE_UID: {len(entrance_uids)}")
-    print(f"Intercom cameras: {len(limited_info.cameras)}")
-    for index, camera in enumerate(limited_info.cameras, start=1):
-        print(format_camera(index, camera, show_private_fields=show_private_fields))
+    print(f"Relays: {len(relay_cameras)}")
+    print(f"Relays with cameras: {count_relays_with_cameras(relay_cameras)}")
+    print(f"Intercom cameras: {count_cameras(relay_cameras)}")
+    for index, relay_cameras_item in enumerate(relay_cameras, start=1):
+        print(
+            format_relay_cameras(index, relay_cameras_item, show_private_fields=show_private_fields)
+        )
+        for camera_index, camera in enumerate(relay_cameras_item.cameras, start=1):
+            print(
+                "  " + format_camera(camera_index, camera, show_private_fields=show_private_fields)
+            )
 
 
-def collect_entrance_uids(relays: tuple[DomofonRelay, ...]) -> tuple[str, ...]:
-    """Собирает непустые `ENTRANCE_UID` из домофонных реле.
+def count_relays_with_cameras(relay_cameras: tuple[DomofonRelayCameras, ...]) -> int:
+    """Считает реле, для которых найдена хотя бы одна камера.
 
     Args:
-        relays: Домофонные реле.
+        relay_cameras: Связки реле и камер.
 
     Returns:
-        Кортеж уникальных UUID подъездов.
+        Количество реле с камерами.
     """
-    entrance_uids = [relay.entrance_uid for relay in relays if relay.entrance_uid is not None]
-    return tuple(dict.fromkeys(entrance_uids))
+    return sum(1 for item in relay_cameras if item.cameras)
+
+
+def count_cameras(relay_cameras: tuple[DomofonRelayCameras, ...]) -> int:
+    """Считает общее количество найденных камер.
+
+    Args:
+        relay_cameras: Связки реле и камер.
+
+    Returns:
+        Количество камер.
+    """
+    return sum(len(item.cameras) for item in relay_cameras)
+
+
+def format_relay_cameras(
+    index: int,
+    relay_cameras: DomofonRelayCameras,
+    *,
+    show_private_fields: bool,
+) -> str:
+    """Форматирует реле и количество найденных камер.
+
+    Args:
+        index: Порядковый номер реле.
+        relay_cameras: Связка реле и камер.
+        show_private_fields: Печатать приватные поля вроде id, названия и адреса.
+
+    Returns:
+        Строка реле.
+    """
+    relay = relay_cameras.relay
+    fields = [
+        f"Relay #{index}",
+        f"cameras={len(relay_cameras.cameras)}",
+        f"has_video={format_bool(value=relay.has_video)}",
+        f"smart_intercom={format_bool(value=relay.smart_intercom)}",
+    ]
+    if show_private_fields:
+        fields.extend(
+            (
+                f"relay_id={relay.relay_id if relay.relay_id is not None else 'unknown'}",
+                f"type={relay.relay_type or 'тип не указан'}",
+                f"description={relay.relay_descr or 'описание не указано'}",
+                f"address={relay.address or 'адрес не указан'}",
+            )
+        )
+    return ", ".join(fields)
 
 
 def format_camera(
@@ -69,8 +119,7 @@ def format_camera(
         f"Camera #{index}",
         f"live={live}",
         f"archive={archive}",
-        f"hls={'yes' if camera.media is not None and camera.media.hls is not None else 'no'}",
-        f"mse={'yes' if camera.media is not None and camera.media.mse is not None else 'no'}",
+        f"streams={'yes' if camera.streams.has_any else 'no'}",
     ]
     if show_private_fields:
         fields.extend(
@@ -82,6 +131,20 @@ def format_camera(
             )
         )
     return ", ".join(fields)
+
+
+def format_bool(*, value: bool | None) -> str:
+    """Форматирует трехзначный boolean для консоли.
+
+    Args:
+        value: `True`, `False` или `None`.
+
+    Returns:
+        `yes`, `no` или `unknown`.
+    """
+    if value is None:
+        return "unknown"
+    return "yes" if value else "no"
 
 
 if __name__ == "__main__":

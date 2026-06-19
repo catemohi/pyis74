@@ -10,8 +10,7 @@
 - открытие двери;
 - получение камер и ссылок на видеопотоки;
 - получение данных личного кабинета;
-- история событий;
-- SIP и FCM в последующих версиях.
+- история событий.
 
 ## Требования
 
@@ -66,6 +65,8 @@ phone auth, проверка адреса, проверка баланса, ис
 
 История событий доступна через `client.history.get_events(...)`. Метод использует
 CRM/LK API и при необходимости получает LK token через текущий mobile token.
+Для частого сценария последних открытий и звонков есть
+`client.history.get_recent_activity(...)`.
 
 Camera API доступен через `client.cameras`:
 
@@ -74,6 +75,9 @@ Camera API доступен через `client.cameras`:
 - `get_group(group_id)`;
 - `get_limited_info_by_uuid(uuid)`;
 - `get_limited_info_by_uuids(uuids)`.
+
+У каждой `Camera` есть свойство `streams`, которое собирает HLS, MSE, snapshot и
+WebSocket URL в одну модель `CameraStreams`.
 
 Диагностические примеры `examples/inspect_cameras.py` и
 `examples/inspect_user_device.py` по умолчанию печатают безопасную сводку без адресов,

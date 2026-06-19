@@ -8,10 +8,13 @@ import pytest
 from pyis74.exceptions import IS74APIError
 from pyis74.models import (
     Balance,
+    Camera,
+    HistoryEventKind,
     HistoryResponse,
     LkToken,
     MobileToken,
     PhoneConfirmationCheck,
+    classify_history_event_type,
     parse_datetime,
 )
 
@@ -117,8 +120,95 @@ def test_history_response_from_json_object() -> None:
     event = history.events[0]
     assert event.created_at == datetime(2026, 6, 19, 12, 30, tzinfo=UTC)
     assert event.event_type == "HANDSET_CALL"
+    assert event.kind is HistoryEventKind.CALL
+    assert event.is_call is True
+    assert event.is_open is False
     assert event.params is not None
     assert event.params.entrance_title == "Подъезд 1"
+
+
+def test_history_response_filters_events() -> None:
+    """Проверяет локальные фильтры истории."""
+    history = HistoryResponse.from_json_object(
+        {
+            "data": [
+                {"create_date": "2026-06-19T12:30:00Z", "type": "OPEN_API"},
+                {"create_date": "2026-06-19T12:31:00Z", "type": "HANDSET_CALL"},
+                {
+                    "create_date": "2026-06-19T12:32:00Z",
+                    "type": "OTHER_EVENT",
+                    "image_link": "https://example.invalid/history/snapshot.jpg",
+                },
+            ],
+            "page": "1",
+            "perPage": str(HISTORY_PER_PAGE),
+            "count": "3",
+        }
+    )
+
+    assert [event.event_type for event in history.filter_events(kinds=("open", "call"))] == [
+        "OPEN_API",
+        "HANDSET_CALL",
+    ]
+    assert [event.event_type for event in history.filter_events(event_types=("open_api",))] == [
+        "OPEN_API"
+    ]
+    assert [event.event_type for event in history.filter_events(with_images=True)] == [
+        "OTHER_EVENT"
+    ]
+
+
+def test_classify_history_event_type() -> None:
+    """Проверяет нормализацию типов истории."""
+    assert classify_history_event_type("OPEN_INTERNAL") is HistoryEventKind.OPEN
+    assert classify_history_event_type("HANDSET_CALL") is HistoryEventKind.CALL
+    assert classify_history_event_type("UNKNOWN") is HistoryEventKind.OTHER
+    assert classify_history_event_type(None) is HistoryEventKind.OTHER
+
+
+def test_camera_streams_collects_urls() -> None:
+    """Проверяет компактную модель stream URL камеры."""
+    camera = Camera.from_json_object(
+        {
+            "ID": 9100,
+            "UUID": "00000000-0000-4000-8000-000000000001",
+            "OBJECT": "CAMERA",
+            "MEDIA": {
+                "HLS": {
+                    "LIVE": {
+                        "MAIN": "https://example.invalid/hls/main.m3u8",
+                        "LOW_LATENCY": "https://example.invalid/hls/ll.m3u8",
+                    },
+                    "ARCHIVE": "https://example.invalid/hls/archive.m3u8",
+                },
+                "MSE": {"LIVE": "wss://example.invalid/ws/mse"},
+                "SNAPSHOT": {
+                    "LIVE": {
+                        "MAIN": "https://example.invalid/snapshot.jpg",
+                        "LOSSY": "https://example.invalid/snapshot_lossy.jpg",
+                    }
+                },
+            },
+            "REALTIME_WS": {
+                "combined": "wss://example.invalid/ws/combined",
+                "main": "wss://example.invalid/ws/main",
+                "sub": "wss://example.invalid/ws/sub",
+            },
+        }
+    )
+
+    assert camera.streams.has_any is True
+    assert camera.streams.items() == (
+        ("hls.live.main", "https://example.invalid/hls/main.m3u8"),
+        ("hls.live.low_latency", "https://example.invalid/hls/ll.m3u8"),
+        ("hls.archive", "https://example.invalid/hls/archive.m3u8"),
+        ("mse.live", "wss://example.invalid/ws/mse"),
+        ("snapshot.live.main", "https://example.invalid/snapshot.jpg"),
+        ("snapshot.live.lossy", "https://example.invalid/snapshot_lossy.jpg"),
+        ("realtime_ws.combined", "wss://example.invalid/ws/combined"),
+        ("realtime_ws.main", "wss://example.invalid/ws/main"),
+        ("realtime_ws.sub", "wss://example.invalid/ws/sub"),
+    )
 
 
 def test_parse_datetime_handles_naive_value_as_utc() -> None:

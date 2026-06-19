@@ -43,4 +43,11 @@ def test_package_exports_camera_models() -> None:
     assert pyis74.CameraGroup is not None
     assert pyis74.CameraGroupContent is not None
     assert pyis74.CameraLimitedInfo is not None
+    assert pyis74.CameraStreams is not None
     assert pyis74.SelfCameraGroup is not None
+
+
+def test_package_exports_high_level_models() -> None:
+    """Проверяет, что пакет экспортирует high-level модели."""
+    assert pyis74.DomofonRelayCameras is not None
+    assert pyis74.HistoryEventKind is not None

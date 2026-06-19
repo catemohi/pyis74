@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import date
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from pyis74 import endpoints
-from pyis74.models import HistoryResponse
+from pyis74.models import HistoryEvent, HistoryEventKind, HistoryResponse
 from pyis74.options import ClientRequestOptions
 from pyis74.types import QueryParams, normalize_json_object
 
 if TYPE_CHECKING:
     from pyis74.client import IS74, IS74Async
+
+DEFAULT_ACTIVITY_KINDS: Final[tuple[HistoryEventKind, ...]] = (
+    HistoryEventKind.OPEN,
+    HistoryEventKind.CALL,
+)
 
 
 class HistoryAPI:
@@ -62,6 +68,46 @@ class HistoryAPI:
         )
         return HistoryResponse.from_json_object(normalize_json_object(payload))
 
+    async def get_recent_activity(  # noqa: PLR0913
+        self,
+        *,
+        from_date: date | str | None = None,
+        to_date: date | str | None = None,
+        page: int | None = None,
+        per_page: int | None = None,
+        event_types: Iterable[str] = (),
+        kinds: Iterable[HistoryEventKind | str] = DEFAULT_ACTIVITY_KINDS,
+        with_images: bool | None = None,
+    ) -> tuple[HistoryEvent, ...]:
+        """Возвращает отфильтрованные события открытий и звонков.
+
+        Метод получает страницу истории через `get_events()`, затем локально фильтрует
+        ее через `HistoryResponse.filter_events()`.
+
+        Args:
+            from_date: Начальная дата фильтра в формате `YYYY-MM-DD` или `date`.
+            to_date: Конечная дата фильтра в формате `YYYY-MM-DD` или `date`.
+            page: Номер страницы.
+            per_page: Количество записей на странице.
+            event_types: Точные типы событий из API.
+            kinds: Нормализованные категории событий. По умолчанию `open` и `call`.
+            with_images: Если задано, фильтровать по наличию snapshot-ссылки.
+
+        Returns:
+            Кортеж событий текущей страницы, подходящих под фильтры.
+        """
+        history = await self.get_events(
+            from_date=from_date,
+            to_date=to_date,
+            page=page,
+            per_page=per_page,
+        )
+        return history.filter_events(
+            event_types=event_types,
+            kinds=kinds,
+            with_images=with_images,
+        )
+
 
 class SyncHistoryAPI:
     """Синхронная обертка домена истории событий IS74."""
@@ -99,6 +145,45 @@ class SyncHistoryAPI:
                 to_date=to_date,
                 page=page,
                 per_page=per_page,
+            )
+        )
+
+    def get_recent_activity(  # noqa: PLR0913
+        self,
+        *,
+        from_date: date | str | None = None,
+        to_date: date | str | None = None,
+        page: int | None = None,
+        per_page: int | None = None,
+        event_types: Iterable[str] = (),
+        kinds: Iterable[HistoryEventKind | str] = DEFAULT_ACTIVITY_KINDS,
+        with_images: bool | None = None,
+    ) -> tuple[HistoryEvent, ...]:
+        """Возвращает отфильтрованные события открытий и звонков.
+
+        Args:
+            from_date: Начальная дата фильтра в формате `YYYY-MM-DD` или `date`.
+            to_date: Конечная дата фильтра в формате `YYYY-MM-DD` или `date`.
+            page: Номер страницы.
+            per_page: Количество записей на странице.
+            event_types: Точные типы событий из API.
+            kinds: Нормализованные категории событий. По умолчанию `open` и `call`.
+            with_images: Если задано, фильтровать по наличию snapshot-ссылки.
+
+        Returns:
+            Кортеж событий текущей страницы, подходящих под фильтры.
+        """
+        kinds_tuple = tuple(kinds)
+        event_types_tuple = tuple(event_types)
+        return self._client._run(
+            lambda client: client.history.get_recent_activity(
+                from_date=from_date,
+                to_date=to_date,
+                page=page,
+                per_page=per_page,
+                event_types=event_types_tuple,
+                kinds=kinds_tuple,
+                with_images=with_images,
             )
         )
 

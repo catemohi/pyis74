@@ -127,6 +127,7 @@ uv run python examples/list_camera_groups.py
 uv run python examples/list_cameras.py
 uv run python examples/list_domofon_relays.py
 uv run python examples/list_history.py
+uv run python examples/list_recent_activity.py
 uv run python examples/open_domofon_relay.py
 uv run python examples/open_domofon_relay_api.py
 uv run python examples/print_camera_streams.py
@@ -137,13 +138,20 @@ uv run python examples/print_camera_streams.py
 примеров.
 
 `login_lk.py` получает CRM/LK token через текущий mobile token. Он нужен для части
-`td-crm.is74.ru` методов, включая CRM-ссылки открытия из SIP/домофонного API.
+`td-crm.is74.ru` методов, включая CRM-ссылки открытия из домофонного API.
 
 `list_history.py` получает историю событий через CRM/LK API
 `GET https://td-crm.is74.ru/api/user/history`. Пример поддерживает фильтры
 `IS74_HISTORY_FROM`, `IS74_HISTORY_TO`, `IS74_HISTORY_PAGE` и
 `IS74_HISTORY_PER_PAGE`. Если LK token еще не получен, клиент получает его через
 текущий mobile token.
+
+`list_recent_activity.py` получает страницу истории и локально фильтрует последние
+открытия и звонки. По умолчанию используются категории `open,call`. Для точных типов
+API задайте `IS74_HISTORY_EVENT_TYPES`, например `OPEN_API,HANDSET_CALL`. Для
+нормализованных категорий задайте `IS74_HISTORY_EVENT_KINDS`, например `open,call`.
+Фильтр по наличию snapshot включается через `IS74_HISTORY_WITH_IMAGES=yes` или
+`IS74_HISTORY_WITH_IMAGES=no`.
 
 `inspect_domofon_relays.py` печатает сырой JSON ответа `/domofon/relays`. Этот пример
 нужен перед реализацией доменного API домофона, чтобы зафиксировать реальные поля ответа.
@@ -178,9 +186,9 @@ CRM/LK token и не падает, если endpoint возвращает `404`.
 безопасную сводку по доступности live/archive/movement и наличию HLS/MSE/snapshot.
 Названия, UUID, id и адреса скрыты без `IS74_SHOW_PRIVATE_CAMERA_FIELDS=yes`.
 
-`get_intercom_cameras.py` получает `/domofon/relays`, собирает `ENTRANCE_UID` и
-одним batch-запросом вызывает `client.cameras.get_limited_info_by_uuids(...)`.
-По умолчанию печатает только количество реле и камер плюс безопасную сводку по камерам.
+`get_intercom_cameras.py` использует `client.domofon.get_relay_cameras()` и печатает
+связку `relay -> cameras`. По умолчанию выводит только счетчики и безопасные флаги.
+Названия, UUID, id и адреса скрыты без `IS74_SHOW_PRIVATE_CAMERA_FIELDS=yes`.
 
 `print_camera_streams.py` печатает подписанные stream/snapshot URL из camera API.
 Этот пример требует `IS74_CONFIRM_PRINT_CAMERA_STREAMS=yes`, потому что ссылки могут

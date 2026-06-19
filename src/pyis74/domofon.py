@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 from pyis74 import endpoints
 from pyis74.exceptions import IS74APIError
-from pyis74.models import DomofonOpenResult, DomofonRelay
+from pyis74.models import Camera, DomofonOpenResult, DomofonRelay, DomofonRelayCameras
 from pyis74.options import ClientRequestOptions
 from pyis74.types import JsonValue, normalize_json_object, normalize_json_value
 
@@ -74,6 +75,46 @@ class DomofonAPI:
             msg = "IS74 domofon relay response is not an object."
             raise IS74APIError(msg, payload) from error
         return DomofonRelay.from_json_object(relay_payload)
+
+    async def get_relay_cameras(self) -> tuple[DomofonRelayCameras, ...]:
+        """Возвращает домофонные реле вместе с найденными камерами.
+
+        Метод сначала получает список реле через `get_relays()`, затем для каждого
+        уникального `ENTRANCE_UID` делает limited-info запрос camera API. Batch-ответ
+        camera API не содержит исходный UUID запроса, поэтому для сохранения связи
+        `relay -> cameras` используются отдельные запросы по уникальным UID.
+
+        Returns:
+            Кортеж связок реле и камер. Реле без `ENTRANCE_UID` тоже попадают в ответ,
+            но с пустым списком камер.
+        """
+        return await self.get_cameras_for_relays(await self.get_relays())
+
+    async def get_cameras_for_relays(
+        self,
+        relays: Iterable[DomofonRelay],
+    ) -> tuple[DomofonRelayCameras, ...]:
+        """Возвращает камеры для уже загруженных домофонных реле.
+
+        Args:
+            relays: Реле из `get_relays()` или другого источника.
+
+        Returns:
+            Кортеж связок реле и камер.
+        """
+        relays_tuple = tuple(relays)
+        cameras_by_entrance_uid: dict[str, tuple[Camera, ...]] = {}
+        for entrance_uid in collect_unique_entrance_uids(relays_tuple):
+            limited_info = await self._client.cameras.get_limited_info_by_uuid(entrance_uid)
+            cameras_by_entrance_uid[entrance_uid] = limited_info.cameras
+
+        return tuple(
+            DomofonRelayCameras(
+                relay=relay,
+                cameras=cameras_by_entrance_uid.get(relay.entrance_uid or "", ()),
+            )
+            for relay in relays_tuple
+        )
 
     async def open_relay(
         self,
@@ -221,6 +262,29 @@ class SyncDomofonAPI:
         """
         return self._client._run(lambda client: client.domofon.get_relay(relay_id))
 
+    def get_relay_cameras(self) -> tuple[DomofonRelayCameras, ...]:
+        """Возвращает домофонные реле вместе с найденными камерами.
+
+        Returns:
+            Кортеж связок реле и камер.
+        """
+        return self._client._run(lambda client: client.domofon.get_relay_cameras())
+
+    def get_cameras_for_relays(
+        self,
+        relays: Iterable[DomofonRelay],
+    ) -> tuple[DomofonRelayCameras, ...]:
+        """Возвращает камеры для уже загруженных домофонных реле.
+
+        Args:
+            relays: Реле из `get_relays()` или другого источника.
+
+        Returns:
+            Кортеж связок реле и камер.
+        """
+        relays_tuple = tuple(relays)
+        return self._client._run(lambda client: client.domofon.get_cameras_for_relays(relays_tuple))
+
     def open_relay(
         self,
         relay: DomofonRelay,
@@ -304,6 +368,19 @@ def build_domofon_open_url(relay: DomofonRelay) -> str:
         msg = "IS74 domofon relay does not contain open URL or RELAY_ID."
         raise IS74APIError(msg, relay.raw)
     return endpoints.DOMOFON_RELAY_OPEN_TEMPLATE.format(relay_id=relay.relay_id)
+
+
+def collect_unique_entrance_uids(relays: Iterable[DomofonRelay]) -> tuple[str, ...]:
+    """Собирает уникальные непустые `ENTRANCE_UID` из реле.
+
+    Args:
+        relays: Домофонные реле.
+
+    Returns:
+        Кортеж UID в порядке первого появления.
+    """
+    entrance_uids = [relay.entrance_uid for relay in relays if relay.entrance_uid]
+    return tuple(dict.fromkeys(entrance_uids))
 
 
 def should_add_from_app(target: str, *, from_app: bool) -> bool:

@@ -1,5 +1,7 @@
 """Тесты домена домофонов IS74."""
 
+from urllib.parse import parse_qs
+
 import pytest
 from pytest_httpx import HTTPXMock
 
@@ -15,6 +17,9 @@ HTTP_OK = 200
 HTTP_NO_CONTENT = 204
 API_MAC = "02:00:00:00:01:01"
 CRM_MAC = "02:00:00:00:02:01"
+CAMERA_ID = 9100
+ENTRANCE_UID = "00000000-0000-4000-8000-000000000001"
+EXPECTED_RELAY_CAMERA_ITEMS = 2
 
 
 def build_api_relay_payload() -> JsonObject:
@@ -49,7 +54,7 @@ def build_crm_relay_payload() -> JsonObject:
     return {
         "ADDRESS": "Тестоград, ул. Примерная, д. 1, п. 1",
         "BUILDING_ID": str(BUILDING_ID),
-        "ENTRANCE_UID": "00000000-0000-4000-8000-000000000001",
+        "ENTRANCE_UID": ENTRANCE_UID,
         "HAS_VIDEO": "1",
         "IMAGE_URL": "https://example.invalid/snapshot.jpg",
         "IS_MAIN": "1",
@@ -79,6 +84,24 @@ def build_crm_relay_payload() -> JsonObject:
         "SMART_INTERCOM": "1",
         "STATUS_CODE": "0",
         "STATUS_TEXT": "OK",
+    }
+
+
+def build_camera_payload() -> JsonObject:
+    """Возвращает fixture камеры домофона."""
+    return {
+        "ID": CAMERA_ID,
+        "UUID": "00000000-0000-4000-8000-000000000101",
+        "OBJECT": "CAMERA",
+        "NAME": "Тестовая камера подъезда",
+        "MEDIA": {
+            "HLS": {
+                "LIVE": {
+                    "MAIN": "https://example.invalid/hls/main.m3u8",
+                    "LOW_LATENCY": "https://example.invalid/hls/ll.m3u8",
+                }
+            }
+        },
     }
 
 
@@ -243,3 +266,33 @@ def test_sync_client_gets_relays(httpx_mock: HTTPXMock) -> None:
     relays = IS74(backoff_factor=0, mobile_token="mobile-token").domofon.get_relays()
 
     assert relays[0].relay_id == API_RELAY_ID
+
+
+@pytest.mark.asyncio
+async def test_get_relay_cameras_maps_cameras_to_relays(httpx_mock: HTTPXMock) -> None:
+    """Проверяет high-level связку реле и камер."""
+    httpx_mock.add_response(
+        method="GET",
+        url=endpoints.DOMOFON_RELAYS,
+        json=[build_api_relay_payload(), build_crm_relay_payload()],
+    )
+    httpx_mock.add_response(
+        method="POST",
+        url=endpoints.CAMS_LIMITED_INFO_BY_UUID,
+        json={str(CAMERA_ID): build_camera_payload()},
+    )
+
+    async with IS74Async(backoff_factor=0, mobile_token="mobile-token") as client:
+        relay_cameras = await client.domofon.get_relay_cameras()
+
+    assert len(relay_cameras) == EXPECTED_RELAY_CAMERA_ITEMS
+    assert relay_cameras[0].relay.relay_id == API_RELAY_ID
+    assert relay_cameras[0].cameras == ()
+    assert relay_cameras[1].relay.relay_id == CRM_RELAY_ID
+    assert len(relay_cameras[1].cameras) == 1
+    assert relay_cameras[1].cameras[0].camera_id == CAMERA_ID
+
+    requests = httpx_mock.get_requests()
+    assert [request.method for request in requests] == ["GET", "POST"]
+    parsed_form = parse_qs(requests[1].content.decode())
+    assert parsed_form == {"CAMERA_UUIDS[]": [ENTRANCE_UID]}

@@ -7,12 +7,14 @@ import pytest
 from pytest_httpx import HTTPXMock
 
 from pyis74 import IS74, IS74Async, endpoints
+from pyis74.models import HistoryEventKind
 from pyis74.types import JsonObject
 
 HISTORY_PAGE = 2
 HISTORY_PER_PAGE = 5
 HISTORY_COUNT = 11
 BUYER_ID = 1
+HISTORY_EVENT_COUNT = 3
 HISTORY_URL = (
     "https://td-crm.is74.ru/api/user/history?from=2026-06-01&to=2026-06-19&page=2&perPage=5"
 )
@@ -31,7 +33,20 @@ def build_history_payload() -> JsonObject:
                     "entranceTitle": "Подъезд 1",
                 },
                 "image_link": "https://example.invalid/history/snapshot.jpg",
-            }
+            },
+            {
+                "create_date": "2026-06-19T12:31:00Z",
+                "type": "HANDSET_CALL",
+                "params": {
+                    "mac": "02:00:00:00:00:01",
+                    "address": "Тестоград, ул. Примерная, д. 1",
+                    "entranceTitle": "Подъезд 1",
+                },
+            },
+            {
+                "create_date": "2026-06-19T12:32:00Z",
+                "type": "OTHER_EVENT",
+            },
         ],
         "page": HISTORY_PAGE,
         "perPage": HISTORY_PER_PAGE,
@@ -57,11 +72,12 @@ async def test_get_events_uses_lk_token_and_query_params(httpx_mock: HTTPXMock) 
     assert history.page == HISTORY_PAGE
     assert history.per_page == HISTORY_PER_PAGE
     assert history.count == HISTORY_COUNT
-    assert len(history.events) == 1
+    assert len(history.events) == HISTORY_EVENT_COUNT
     event = history.events[0]
     assert event.create_date == "2026-06-19T12:30:00Z"
     assert event.created_at == datetime(2026, 6, 19, 12, 30, tzinfo=UTC)
     assert event.event_type == "OPEN_API"
+    assert event.kind is HistoryEventKind.OPEN
     assert event.params is not None
     assert event.params.mac == "02:00:00:00:00:01"
     assert event.params.entrance_title == "Подъезд 1"
@@ -70,6 +86,18 @@ async def test_get_events_uses_lk_token_and_query_params(httpx_mock: HTTPXMock) 
     requests = httpx_mock.get_requests()
     assert json.loads(requests[0].content) == {"buyerId": BUYER_ID, "token": "mobile-token"}
     assert requests[1].headers["authorization"] == "Bearer lk-token"
+
+
+@pytest.mark.asyncio
+async def test_get_recent_activity_filters_history_page(httpx_mock: HTTPXMock) -> None:
+    """Проверяет получение последних открытий и звонков."""
+    httpx_mock.add_response(method="POST", url=endpoints.CRM_AUTH_LK, json={"TOKEN": "lk-token"})
+    httpx_mock.add_response(method="GET", url=endpoints.CRM_HISTORY, json=build_history_payload())
+
+    async with IS74Async(backoff_factor=0, mobile_token="mobile-token") as client:
+        events = await client.history.get_recent_activity()
+
+    assert [event.event_type for event in events] == ["OPEN_API", "HANDSET_CALL"]
 
 
 def test_sync_client_gets_history_with_existing_lk_token(httpx_mock: HTTPXMock) -> None:

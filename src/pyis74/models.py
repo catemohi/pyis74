@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
+from enum import StrEnum
 from typing import Self
 
 from pyis74.exceptions import IS74APIError
@@ -664,6 +666,18 @@ class DomofonOpenResult:
     response_text: str
 
 
+class HistoryEventKind(StrEnum):
+    """Нормализованная категория события истории.
+
+    Значение `event_type` из API остается доступным как есть, а `kind` нужен для
+    пользовательских фильтров, которым не важно точное внутреннее имя события.
+    """
+
+    OPEN = "open"
+    CALL = "call"
+    OTHER = "other"
+
+
 @dataclass(frozen=True, slots=True)
 class HistoryEventParams:
     """Параметры события истории.
@@ -743,6 +757,33 @@ class HistoryEvent:
             raw=payload,
         )
 
+    @property
+    def kind(self) -> HistoryEventKind:
+        """Возвращает нормализованную категорию события.
+
+        Returns:
+            Категория события: открытие, звонок или другое событие.
+        """
+        return classify_history_event_type(self.event_type)
+
+    @property
+    def is_open(self) -> bool:
+        """Проверяет, относится ли событие к открытию.
+
+        Returns:
+            `True`, если событие похоже на открытие.
+        """
+        return self.kind is HistoryEventKind.OPEN
+
+    @property
+    def is_call(self) -> bool:
+        """Проверяет, относится ли событие к звонку.
+
+        Returns:
+            `True`, если событие похоже на звонок.
+        """
+        return self.kind is HistoryEventKind.CALL
+
 
 @dataclass(frozen=True, slots=True)
 class HistoryResponse:
@@ -782,6 +823,86 @@ class HistoryResponse:
             count=get_int(payload, "count"),
             raw=payload,
         )
+
+    def filter_events(
+        self,
+        *,
+        event_types: Iterable[str] = (),
+        kinds: Iterable[HistoryEventKind | str] = (),
+        with_images: bool | None = None,
+    ) -> tuple[HistoryEvent, ...]:
+        """Фильтрует события текущей страницы истории.
+
+        Фильтрация выполняется локально по уже полученной странице. Поля `page`,
+        `per_page`, `count` и `raw` остаются исходными свойствами ответа API.
+
+        Args:
+            event_types: Точные значения `HistoryEvent.event_type`, например `OPEN_API`.
+            kinds: Нормализованные категории `open`, `call`, `other`.
+            with_images: Если задано, фильтрует события по наличию `image_link`.
+
+        Returns:
+            Кортеж событий, подходящих под фильтры.
+        """
+        expected_event_types = {event_type.upper() for event_type in event_types}
+        expected_kinds = {normalize_history_event_kind(kind) for kind in kinds}
+        filtered_events: list[HistoryEvent] = []
+
+        for event in self.events:
+            event_type = event.event_type.upper() if event.event_type is not None else ""
+            if expected_event_types and event_type not in expected_event_types:
+                continue
+            if expected_kinds and event.kind not in expected_kinds:
+                continue
+            if with_images is not None and bool(event.image_link) != with_images:
+                continue
+            filtered_events.append(event)
+
+        return tuple(filtered_events)
+
+
+def classify_history_event_type(event_type: str | None) -> HistoryEventKind:
+    """Классифицирует исходный тип события истории.
+
+    Args:
+        event_type: Значение поля `type` из API.
+
+    Returns:
+        Нормализованная категория события.
+    """
+    if event_type is None:
+        return HistoryEventKind.OTHER
+
+    normalized = event_type.strip().upper()
+    if "OPEN" in normalized:
+        return HistoryEventKind.OPEN
+    if "CALL" in normalized or "HANDSET" in normalized:
+        return HistoryEventKind.CALL
+    return HistoryEventKind.OTHER
+
+
+def normalize_history_event_kind(value: HistoryEventKind | str) -> HistoryEventKind:
+    """Нормализует пользовательское значение категории события.
+
+    Args:
+        value: `HistoryEventKind` или строка `open`, `call`, `other`.
+
+    Returns:
+        Нормализованная категория.
+
+    Raises:
+        ValueError: Значение не является известной категорией.
+    """
+    if isinstance(value, HistoryEventKind):
+        return value
+
+    normalized = value.strip().lower()
+    for kind in HistoryEventKind:
+        if kind.value == normalized:
+            return kind
+
+    msg = f"Unknown history event kind: {value!r}."
+    raise ValueError(msg)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1275,6 +1396,113 @@ class CameraVaFeatures:
 
 
 @dataclass(frozen=True, slots=True)
+class CameraStreams:
+    """Собранные media URL камеры.
+
+    Args:
+        hls_live_main: Основной live HLS URL.
+        hls_live_low_latency: Low-latency live HLS URL.
+        hls_archive: Архивный HLS URL.
+        mse_live: Live MSE WebSocket URL.
+        snapshot_live_main: Основной live snapshot URL.
+        snapshot_live_lossy: Сжатый live snapshot URL.
+        realtime_ws_combined: Общий realtime WebSocket URL.
+        realtime_ws_main: Main-quality realtime WebSocket URL.
+        realtime_ws_sub: Sub-quality realtime WebSocket URL.
+    """
+
+    hls_live_main: str | None
+    hls_live_low_latency: str | None
+    hls_archive: str | None
+    mse_live: str | None
+    snapshot_live_main: str | None
+    snapshot_live_lossy: str | None
+    realtime_ws_combined: str | None
+    realtime_ws_main: str | None
+    realtime_ws_sub: str | None
+
+    @classmethod
+    def from_camera(cls, camera: Camera) -> Self:
+        """Собирает stream URL из вложенных полей камеры.
+
+        Args:
+            camera: Камера IS74.
+
+        Returns:
+            Компактная модель stream URL.
+        """
+        hls_live_main: str | None = None
+        hls_live_low_latency: str | None = None
+        hls_archive: str | None = None
+        mse_live: str | None = None
+        snapshot_live_main: str | None = None
+        snapshot_live_lossy: str | None = None
+        realtime_ws_combined: str | None = None
+        realtime_ws_main: str | None = None
+        realtime_ws_sub: str | None = None
+
+        if camera.media is not None:
+            if camera.media.hls is not None:
+                hls_archive = camera.media.hls.archive
+                if camera.media.hls.live is not None:
+                    hls_live_main = camera.media.hls.live.main
+                    hls_live_low_latency = camera.media.hls.live.low_latency
+            if camera.media.mse is not None:
+                mse_live = camera.media.mse.live
+            if camera.media.snapshot is not None and camera.media.snapshot.live is not None:
+                snapshot_live_main = camera.media.snapshot.live.main
+                snapshot_live_lossy = camera.media.snapshot.live.lossy
+
+        if camera.realtime_ws is not None:
+            realtime_ws_combined = camera.realtime_ws.combined
+            realtime_ws_main = camera.realtime_ws.main
+            realtime_ws_sub = camera.realtime_ws.sub
+
+        return cls(
+            hls_live_main=hls_live_main,
+            hls_live_low_latency=hls_live_low_latency,
+            hls_archive=hls_archive,
+            mse_live=mse_live,
+            snapshot_live_main=snapshot_live_main,
+            snapshot_live_lossy=snapshot_live_lossy,
+            realtime_ws_combined=realtime_ws_combined,
+            realtime_ws_main=realtime_ws_main,
+            realtime_ws_sub=realtime_ws_sub,
+        )
+
+    @property
+    def has_any(self) -> bool:
+        """Проверяет, есть ли хотя бы один URL.
+
+        Returns:
+            `True`, если модель содержит хотя бы один URL.
+        """
+        return bool(self.items())
+
+    def items(self) -> tuple[tuple[str, str], ...]:
+        """Возвращает непустые URL с устойчивыми именами полей.
+
+        Returns:
+            Кортеж пар `имя поля`, `URL`.
+        """
+        stream_items: list[tuple[str, str]] = []
+        for name, value in (
+            ("hls.live.main", self.hls_live_main),
+            ("hls.live.low_latency", self.hls_live_low_latency),
+            ("hls.archive", self.hls_archive),
+            ("mse.live", self.mse_live),
+            ("snapshot.live.main", self.snapshot_live_main),
+            ("snapshot.live.lossy", self.snapshot_live_lossy),
+            ("realtime_ws.combined", self.realtime_ws_combined),
+            ("realtime_ws.main", self.realtime_ws_main),
+            ("realtime_ws.sub", self.realtime_ws_sub),
+        ):
+            if value:
+                stream_items.append((name, value))
+        return tuple(stream_items)
+
+
+@dataclass(frozen=True, slots=True)
 class Camera:
     """Камера IS74.
 
@@ -1404,6 +1632,15 @@ class Camera:
             raw=payload,
         )
 
+    @property
+    def streams(self) -> CameraStreams:
+        """Возвращает собранные stream URL камеры.
+
+        Returns:
+            Компактная модель stream/snapshot/WebSocket URL.
+        """
+        return CameraStreams.from_camera(self)
+
 
 @dataclass(frozen=True, slots=True)
 class CameraGroup:
@@ -1520,6 +1757,19 @@ class CameraLimitedInfo:
             Camera.from_json_object(item) for item in payload.values() if isinstance(item, dict)
         )
         return cls(cameras=cameras, raw=payload)
+
+
+@dataclass(frozen=True, slots=True)
+class DomofonRelayCameras:
+    """Связка домофонного реле и найденных для него камер.
+
+    Args:
+        relay: Домофонное реле.
+        cameras: Камеры, найденные по `relay.entrance_uid`.
+    """
+
+    relay: DomofonRelay
+    cameras: tuple[Camera, ...]
 
 
 def build_camera_access_status(payload: JsonObject, key: str) -> CameraAccessStatus | None:
