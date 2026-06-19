@@ -65,8 +65,9 @@ phone auth, проверка адреса, проверка баланса и и
 CRM/LK API и при необходимости получает LK token через текущий mobile token.
 
 Camera API и CRM user-device пока изучаются через диагностические примеры
-`examples/inspect_cameras.py` и `examples/inspect_user_device.py`. Их вывод может
-содержать приватные идентификаторы, адреса и подписанные URL.
+`examples/inspect_cameras.py` и `examples/inspect_user_device.py`. По умолчанию они
+печатают безопасную сводку без адресов, UUID, MAC-адресов и подписанных URL. Сырой JSON
+включается только явным `IS74_RAW_JSON=yes`.
 
 ## Разработка
 
