@@ -92,6 +92,20 @@ WebSocket URL в одну модель `CameraStreams`.
 UUID, MAC-адресов и подписанных URL. Сырой JSON включается только явным
 `IS74_RAW_JSON=yes`.
 
+## Благодарности
+
+Спасибо авторам открытых проектов, по которым мы сверяли известные endpoint и
+поведение API:
+
+- [@hoolea](https://github.com/hoolea) и проект
+  [`intersvyaz_hass`](https://github.com/hoolea/intersvyaz_hass);
+- [@alexmorbo](https://github.com/alexmorbo) и проект
+  [`domru`](https://github.com/alexmorbo/domru).
+
+Эти проекты помогли быстрее проверить гипотезы по авторизации, аккаунту и домофонным
+сценариям. `pyis74` остается самостоятельной библиотекой с собственным публичным API,
+типизацией и тестами.
+
 ## Разработка
 
 ```bash
