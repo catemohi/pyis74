@@ -63,6 +63,17 @@ export IS74_HISTORY_PAGE="1"
 export IS74_HISTORY_PER_PAGE="20"
 ```
 
+Для диагностики камер можно ограничить детальный обход групп или указать конкретные
+значения:
+
+```bash
+export IS74_CAMERA_GROUP_LIMIT="10"
+export IS74_CAMERA_GROUP_ID="1000"
+export IS74_CAMERA_UUIDS="00000000-0000-4000-8000-000000000001"
+```
+
+`IS74_CAMERA_UUIDS` принимает несколько UUID через запятую.
+
 ## Запуск
 
 ```bash
@@ -73,6 +84,8 @@ uv run python examples/check_addresses.py
 uv run python examples/check_balance.py
 uv run python examples/inspect_domofon_relays.py
 uv run python examples/inspect_domofon_relay.py
+uv run python examples/inspect_cameras.py
+uv run python examples/inspect_user_device.py
 uv run python examples/list_domofon_relays.py
 uv run python examples/list_history.py
 uv run python examples/open_domofon_relay.py
@@ -94,6 +107,24 @@ uv run python examples/open_domofon_relay_api.py
 
 `inspect_domofon_relays.py` печатает сырой JSON ответа `/domofon/relays`. Этот пример
 нужен перед реализацией доменного API домофона, чтобы зафиксировать реальные поля ответа.
+
+`inspect_user_device.py` печатает сырой JSON ответа
+`GET https://td-crm.is74.ru/api/user-device` через CRM/LK token. Вывод может содержать
+идентификаторы устройств и push-related поля, поэтому его нельзя сохранять в публичные
+документы, тесты или fixtures без анонимизации.
+
+`inspect_cameras.py` печатает сырые ответы camera endpoints:
+
+- `GET https://cams.is74.ru/api/self-cams-with-group`;
+- `GET https://cams.is74.ru/api/get-group/`;
+- `GET https://cams.is74.ru/api/get-group/?selfCams=true`;
+- `GET https://cams.is74.ru/api/get-group/{group_id}`;
+- `POST https://cams.is74.ru/api/limited-info-by-uuid`.
+
+Для `/limited-info-by-uuid` пример автоматически берет `ENTRANCE_UID` из
+`/domofon/relays` и дополнительно использует UUID из `IS74_CAMERA_UUIDS`. Вывод может
+содержать адреса, UUID, stream/snapshot URL и подписанные ссылки; такие данные нужно
+анонимизировать перед фиксацией в repo.
 
 ## Открытие домофонных реле
 

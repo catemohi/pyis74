@@ -64,6 +64,10 @@ phone auth, проверка адреса, проверка баланса и и
 История событий доступна через `client.history.get_events(...)`. Метод использует
 CRM/LK API и при необходимости получает LK token через текущий mobile token.
 
+Camera API и CRM user-device пока изучаются через диагностические примеры
+`examples/inspect_cameras.py` и `examples/inspect_user_device.py`. Их вывод может
+содержать приватные идентификаторы, адреса и подписанные URL.
+
 ## Разработка
 
 ```bash
