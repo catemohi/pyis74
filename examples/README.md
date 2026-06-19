@@ -48,8 +48,10 @@ uv run python examples/phone_auth.py
 uv run python examples/check_addresses.py
 uv run python examples/check_balance.py
 uv run python examples/inspect_domofon_relays.py
+uv run python examples/inspect_domofon_relay.py
 uv run python examples/list_domofon_relays.py
 uv run python examples/open_domofon_relay.py
+uv run python examples/open_domofon_relay_api.py
 ```
 
 `phone_auth.py` выводит список адресов после подтверждения телефона и получает token
@@ -60,5 +62,9 @@ uv run python examples/open_domofon_relay.py
 нужен перед реализацией доменного API домофона, чтобы зафиксировать реальные поля ответа.
 
 `list_domofon_relays.py` печатает типизированный список реле. `open_domofon_relay.py`
-открывает реле по `IS74_RELAY_ID` и требует `IS74_CONFIRM_OPEN=yes`, чтобы случайный
-запуск не отправил команду открытия.
+открывает реле по `IS74_RELAY_ID` через `LINKS.open` из списка реле и требует
+`IS74_CONFIRM_OPEN=yes`, чтобы случайный запуск не отправил команду открытия.
+
+`inspect_domofon_relay.py` печатает сырой JSON ответа `/domofon/relays/{relay_id}`.
+`open_domofon_relay_api.py` открывает реле прямым запросом
+`POST /domofon/relays/{relay_id}/open?from=app`, без использования `LINKS.open`.

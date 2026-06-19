@@ -31,6 +31,24 @@ def require_env(name: str) -> str:
     raise RuntimeError(msg)
 
 
+def require_env_value(name: str, expected: str) -> None:
+    """Проверяет, что переменная окружения равна ожидаемому значению.
+
+    Args:
+        name: Имя переменной окружения.
+        expected: Ожидаемое значение.
+
+    Raises:
+        RuntimeError: Значение переменной отличается от ожидаемого.
+    """
+    value = require_env(name)
+    if value.lower() == expected.lower():
+        return
+
+    msg = f"Set {name}={expected}."
+    raise RuntimeError(msg)
+
+
 def optional_env(name: str) -> str | None:
     """Возвращает непустую переменную окружения или `None`.
 
@@ -44,6 +62,26 @@ def optional_env(name: str) -> str | None:
     if value:
         return value
     return None
+
+
+def read_int_env(name: str) -> int:
+    """Возвращает целое число из переменной окружения.
+
+    Args:
+        name: Имя переменной окружения.
+
+    Returns:
+        Целочисленное значение.
+
+    Raises:
+        RuntimeError: Значение переменной не является целым числом.
+    """
+    value = require_env(name)
+    try:
+        return int(value)
+    except ValueError as error:
+        msg = f"{name} must be an integer: {value!r}."
+        raise RuntimeError(msg) from error
 
 
 def mask_secret(value: str) -> str:

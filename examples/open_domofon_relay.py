@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
-from _common import authorize_client, require_env
+from _common import authorize_client, read_int_env, require_env_value
 
 from pyis74 import IS74Async
 
@@ -32,12 +32,7 @@ def read_relay_id() -> int:
     Raises:
         RuntimeError: Значение `IS74_RELAY_ID` не является целым числом.
     """
-    value = require_env("IS74_RELAY_ID")
-    try:
-        return int(value)
-    except ValueError as error:
-        msg = f"IS74_RELAY_ID must be an integer: {value!r}."
-        raise RuntimeError(msg) from error
+    return read_int_env("IS74_RELAY_ID")
 
 
 def require_open_confirmation() -> None:
@@ -46,12 +41,7 @@ def require_open_confirmation() -> None:
     Raises:
         RuntimeError: `IS74_CONFIRM_OPEN` не равен `yes`.
     """
-    value = require_env("IS74_CONFIRM_OPEN")
-    if value.lower() == "yes":
-        return
-
-    msg = "Set IS74_CONFIRM_OPEN=yes to confirm relay opening."
-    raise RuntimeError(msg)
+    require_env_value("IS74_CONFIRM_OPEN", "yes")
 
 
 if __name__ == "__main__":

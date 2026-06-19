@@ -50,6 +50,29 @@ class DomofonAPI:
             relays.append(DomofonRelay.from_json_object(relay_payload))
         return tuple(relays)
 
+    async def get_relay(self, relay_id: int) -> DomofonRelay:
+        """Возвращает домофонное реле по `RELAY_ID`.
+
+        Args:
+            relay_id: Идентификатор реле.
+
+        Returns:
+            Домофонное реле.
+
+        Raises:
+            IS74APIError: API вернул не JSON-объект.
+        """
+        payload = await self._client.request_mobile(
+            "GET",
+            endpoints.DOMOFON_RELAY_TEMPLATE.format(relay_id=relay_id),
+        )
+        try:
+            relay_payload = normalize_json_object(payload)
+        except TypeError as error:
+            msg = "IS74 domofon relay response is not an object."
+            raise IS74APIError(msg, payload) from error
+        return DomofonRelay.from_json_object(relay_payload)
+
     async def open_relay(
         self,
         relay: DomofonRelay,
@@ -107,6 +130,29 @@ class DomofonAPI:
         msg = f"IS74 domofon relay {relay_id} was not found."
         raise IS74APIError(msg, {"relay_id": relay_id})
 
+    async def open_relay_by_api_id(
+        self,
+        relay_id: int,
+        *,
+        from_app: bool = True,
+    ) -> DomofonOpenResult:
+        """Открывает реле прямым API-запросом по `RELAY_ID`.
+
+        В отличие от `open_relay_by_id()`, метод не использует `LINKS.open` из списка
+        реле и всегда обращается к `/domofon/relays/{relay_id}/open`.
+
+        Args:
+            relay_id: Идентификатор реле.
+            from_app: Добавлять query-параметр `from=app`.
+
+        Returns:
+            Результат успешного HTTP-запроса открытия.
+        """
+        target = endpoints.DOMOFON_RELAY_OPEN_TEMPLATE.format(relay_id=relay_id)
+        options = ClientRequestOptions(params={"from": "app"} if from_app else None)
+        response = await self._client._request_mobile_response("POST", target, options)
+        return build_open_result(response.status_code, response.text, response.content)
+
 
 class SyncDomofonAPI:
     """Синхронная обертка домена домофонов IS74."""
@@ -126,6 +172,17 @@ class SyncDomofonAPI:
             Кортеж доступных реле.
         """
         return self._client._run(lambda client: client.domofon.get_relays())
+
+    def get_relay(self, relay_id: int) -> DomofonRelay:
+        """Возвращает домофонное реле по `RELAY_ID`.
+
+        Args:
+            relay_id: Идентификатор реле.
+
+        Returns:
+            Домофонное реле.
+        """
+        return self._client._run(lambda client: client.domofon.get_relay(relay_id))
 
     def open_relay(
         self,
@@ -161,6 +218,25 @@ class SyncDomofonAPI:
         """
         return self._client._run(
             lambda client: client.domofon.open_relay_by_id(relay_id, from_app=from_app)
+        )
+
+    def open_relay_by_api_id(
+        self,
+        relay_id: int,
+        *,
+        from_app: bool = True,
+    ) -> DomofonOpenResult:
+        """Открывает реле прямым API-запросом по `RELAY_ID`.
+
+        Args:
+            relay_id: Идентификатор реле.
+            from_app: Добавлять query-параметр `from=app`.
+
+        Returns:
+            Результат успешного HTTP-запроса открытия.
+        """
+        return self._client._run(
+            lambda client: client.domofon.open_relay_by_api_id(relay_id, from_app=from_app)
         )
 
 

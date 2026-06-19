@@ -117,6 +117,24 @@ async def test_get_relays_requires_mobile_token() -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_relay_uses_api_id_endpoint(httpx_mock: HTTPXMock) -> None:
+    """Проверяет получение одного реле по `RELAY_ID`."""
+    httpx_mock.add_response(
+        method="GET",
+        url=endpoints.DOMOFON_RELAY_TEMPLATE.format(relay_id=API_RELAY_ID),
+        json=build_api_relay_payload(),
+    )
+
+    async with IS74Async(backoff_factor=0, mobile_token="mobile-token") as client:
+        relay = await client.domofon.get_relay(API_RELAY_ID)
+
+    assert relay.relay_id == API_RELAY_ID
+    request = httpx_mock.get_request()
+    assert request is not None
+    assert request.headers["authorization"] == "Bearer mobile-token"
+
+
+@pytest.mark.asyncio
 async def test_get_relays_rejects_non_list_response(httpx_mock: HTTPXMock) -> None:
     """Проверяет валидацию формата ответа `/domofon/relays`."""
     httpx_mock.add_response(method="GET", url=endpoints.DOMOFON_RELAYS, json={"bad": True})
@@ -138,6 +156,25 @@ async def test_open_relay_uses_api_open_link_with_from_app(httpx_mock: HTTPXMock
 
     async with IS74Async(backoff_factor=0, mobile_token="mobile-token") as client:
         result = await client.domofon.open_relay(relay)
+
+    assert result.status_code == HTTP_OK
+    assert result.payload == {"result": "ok"}
+    request = httpx_mock.get_request()
+    assert request is not None
+    assert request.headers["authorization"] == "Bearer mobile-token"
+
+
+@pytest.mark.asyncio
+async def test_open_relay_by_api_id_uses_direct_api_path(httpx_mock: HTTPXMock) -> None:
+    """Проверяет прямое открытие API-реле по `RELAY_ID`."""
+    httpx_mock.add_response(
+        method="POST",
+        url=f"https://api.is74.ru/domofon/relays/{API_RELAY_ID}/open?from=app",
+        json={"result": "ok"},
+    )
+
+    async with IS74Async(backoff_factor=0, mobile_token="mobile-token") as client:
+        result = await client.domofon.open_relay_by_api_id(API_RELAY_ID)
 
     assert result.status_code == HTTP_OK
     assert result.payload == {"result": "ok"}
