@@ -53,6 +53,14 @@ print(balance.balance)
 Больше сценариев есть в каталоге [`examples`](examples/): авторизация через логин/пароль,
 phone auth, проверка адреса и проверка баланса.
 
+Домофонные примеры разделены на два пути:
+
+- `examples/open_domofon_relay.py` - основной путь через `LINKS.open` из списка реле;
+- `examples/open_domofon_relay_api.py` - диагностический прямой вызов
+  `/domofon/relays/{relay_id}/open`.
+
+Подробное описание различий есть в [`examples/README.md`](examples/README.md).
+
 ## Разработка
 
 ```bash

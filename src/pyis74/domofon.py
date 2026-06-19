@@ -83,12 +83,25 @@ class DomofonAPI:
     ) -> DomofonOpenResult:
         """Открывает домофонное реле.
 
-        Метод использует `LINKS.open`, потому что разные реле могут открываться через
-        разные сервисы: `api.is74.ru` или `td-crm.is74.ru`.
+        Метод открывает уже загруженный объект `DomofonRelay` и использует его
+        `LINKS.open`, если ссылка есть в ответе API. Это основной путь для открытия,
+        потому что разные реле могут обслуживаться разными backend-сервисами.
+
+        Если `LINKS.open` указывает на `api.is74.ru`, клиент выполняет mobile `POST`
+        на URL открытия. Для таких запросов добавляется `Content-Type:
+        application/json`; query-параметр `from=app` добавляется только когда
+        `from_app=True`.
+
+        Если `LINKS.open` указывает на `td-crm.is74.ru`, клиент получает LK token через
+        `AuthAPI.get_lk_token()` и выполняет CRM `GET` с этим token. В этом режиме
+        `from_app` не используется.
+
+        Если `LINKS.open` отсутствует, метод строит fallback URL
+        `/domofon/relays/{relay_id}/open` по `RELAY_ID` и использует mobile `POST`.
 
         Args:
             relay: Реле из `get_relays()`.
-            from_app: Добавлять query-параметр `from=app` для `api.is74.ru`.
+            from_app: Добавлять query-параметр `from=app` для mobile API-open.
 
         Returns:
             Результат успешного HTTP-запроса открытия.
@@ -117,12 +130,18 @@ class DomofonAPI:
         """Открывает домофонное реле по `RELAY_ID`.
 
         Метод сначала загружает список реле и открывает найденный объект через его
-        `LINKS.open`. Это нужно для CRM-реле, где URL нельзя корректно восстановить
-        только по `RELAY_ID`.
+        `LINKS.open`. Это основной высокоуровневый метод для пользовательского кода:
+        он сохраняет различие между реле, которые открываются через mobile API, и
+        реле, которые открываются через CRM/LK API.
+
+        Для CRM-реле URL нельзя надежно восстановить только по `RELAY_ID`, потому что
+        ссылка открытия содержит параметры контроллера из `LINKS.open`. Поэтому метод
+        всегда делает предварительный `GET /domofon/relays`, находит объект реле и
+        затем делегирует открытие в `open_relay()`.
 
         Args:
             relay_id: Идентификатор реле.
-            from_app: Добавлять query-параметр `from=app` для `api.is74.ru`.
+            from_app: Добавлять query-параметр `from=app` для mobile API-open.
 
         Returns:
             Результат успешного HTTP-запроса открытия.
@@ -147,6 +166,14 @@ class DomofonAPI:
 
         В отличие от `open_relay_by_id()`, метод не использует `LINKS.open` из списка
         реле и всегда обращается к `/domofon/relays/{relay_id}/open`.
+
+        Это диагностический или fallback-метод. Он полезен, когда нужно проверить
+        canonical mobile API endpoint отдельно от CRM/LK-ссылок. Для CRM-реле этот
+        метод может быть недостаточным, потому что он игнорирует `LINKS.open`.
+
+        Запрос выполняется как mobile `POST` с `Content-Type: application/json`.
+        При `from_app=True` добавляется query-параметр `from=app`; при
+        `from_app=False` endpoint вызывается без query-параметров.
 
         Args:
             relay_id: Идентификатор реле.
@@ -202,9 +229,13 @@ class SyncDomofonAPI:
     ) -> DomofonOpenResult:
         """Открывает домофонное реле.
 
+        Синхронный аналог `DomofonAPI.open_relay()`. Использует `LINKS.open` из
+        переданного объекта реле и автоматически выбирает mobile API-open или
+        CRM/LK-open.
+
         Args:
             relay: Реле из `get_relays()`.
-            from_app: Добавлять query-параметр `from=app` для `api.is74.ru`.
+            from_app: Добавлять query-параметр `from=app` для mobile API-open.
 
         Returns:
             Результат успешного HTTP-запроса открытия.
@@ -219,9 +250,12 @@ class SyncDomofonAPI:
     ) -> DomofonOpenResult:
         """Открывает домофонное реле по `RELAY_ID`.
 
+        Синхронный аналог `DomofonAPI.open_relay_by_id()`. Сначала загружает список
+        реле, затем открывает найденный объект через его `LINKS.open`.
+
         Args:
             relay_id: Идентификатор реле.
-            from_app: Добавлять query-параметр `from=app` для `api.is74.ru`.
+            from_app: Добавлять query-параметр `from=app` для mobile API-open.
 
         Returns:
             Результат успешного HTTP-запроса открытия.
@@ -237,6 +271,10 @@ class SyncDomofonAPI:
         from_app: bool = True,
     ) -> DomofonOpenResult:
         """Открывает реле прямым API-запросом по `RELAY_ID`.
+
+        Синхронный аналог `DomofonAPI.open_relay_by_api_id()`. Всегда вызывает
+        `/domofon/relays/{relay_id}/open` через mobile API и не использует
+        `LINKS.open`.
 
         Args:
             relay_id: Идентификатор реле.

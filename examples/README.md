@@ -79,13 +79,86 @@ uv run python examples/open_domofon_relay_api.py
 `inspect_domofon_relays.py` печатает сырой JSON ответа `/domofon/relays`. Этот пример
 нужен перед реализацией доменного API домофона, чтобы зафиксировать реальные поля ответа.
 
-`list_domofon_relays.py` печатает типизированный список реле. `open_domofon_relay.py`
-открывает реле по `IS74_RELAY_ID` или `RELAY_ID` через `LINKS.open` из списка реле,
-печатает фактически выбранный `RELAY_ID` и требует `IS74_CONFIRM_OPEN=yes`, чтобы
-случайный запуск не отправил команду открытия.
+## Открытие домофонных реле
+
+В библиотеке есть два разных сценария открытия. Они похожи по названию, но проверяют
+разные HTTP-пути.
+
+### `open_domofon_relay.py`
+
+Это основной пользовательский пример. Он повторяет логику метода
+`DomofonAPI.open_relay_by_id()`:
+
+1. Авторизуется и получает mobile token.
+2. Запрашивает `GET https://api.is74.ru/domofon/relays`.
+3. Находит объект реле по `RELAY_ID`.
+4. Берет из объекта поле `LINKS.open`.
+5. Выбирает способ открытия по типу ссылки:
+   - для `https://api.is74.ru/domofon/relays/.../open` делает mobile `POST`;
+   - для `https://td-crm.is74.ru/api/open/...` получает LK token через
+     `POST https://td-crm.is74.ru/api/auth-lk`, затем делает CRM `GET`.
+
+Этот путь нужен потому, что разные реле в одном аккаунте могут открываться через разные
+backend-сервисы. Для реле с opener `crm` нельзя надежно восстановить корректный URL
+только по `RELAY_ID`: нужен `LINKS.open` из списка реле.
+
+Пример дополнительно печатает безопасную сводку фактического запроса:
+
+```text
+Opening RELAY_ID=900001 from RELAY_ID with opener=crm, link=crm.
+Open request status: 204
+```
+
+В сводку не выводятся адрес, MAC-адрес контроллера, полный URL и token.
+
+### `open_domofon_relay_api.py`
+
+Это диагностический и fallback-пример. Он не загружает список реле и не использует
+`LINKS.open`. Вместо этого он всегда строит canonical API endpoint:
+
+```text
+POST https://api.is74.ru/domofon/relays/{relay_id}/open
+```
+
+По умолчанию добавляется query-параметр `from=app`, то есть итоговый запрос выглядит
+так:
+
+```text
+POST https://api.is74.ru/domofon/relays/{relay_id}/open?from=app
+```
+
+Для проверки варианта без query-параметра задайте:
+
+```bash
+export IS74_FROM_APP="no"
+```
+
+Этот пример полезен, когда нужно отделить проблемы `LINKS.open`/CRM/LK-авторизации от
+проблем самого direct API. Он может вернуть успешный HTTP-статус, но это не доказывает,
+что физическое устройство открылось: финальное подтверждение всегда нужно проверять на
+реальном реле.
+
+### Какой пример использовать
+
+Для обычного открытия используйте `open_domofon_relay.py`. Он уважает `LINKS.open` и
+умеет выбирать между API и CRM backend.
+
+Для отладки используйте `open_domofon_relay_api.py`. Он проверяет только прямой
+`/domofon/relays/{relay_id}/open` endpoint и не подходит как единственный основной путь
+для CRM-реле.
+
+Перед live-проверкой лучше сбросить старое значение `IS74_RELAY_ID`, если дальше
+используется короткий alias `RELAY_ID`:
+
+```bash
+unset IS74_RELAY_ID
+export RELAY_ID="900001"
+export IS74_CONFIRM_OPEN="yes"
+uv run python examples/open_domofon_relay.py
+```
+
+`IS74_RELAY_ID` имеет приоритет над `RELAY_ID`, поэтому старое значение
+`IS74_RELAY_ID` может привести к тому, что пример откроет не тот relay, который указан
+в `RELAY_ID`.
 
 `inspect_domofon_relay.py` печатает сырой JSON ответа `/domofon/relays/{relay_id}`.
-`open_domofon_relay_api.py` открывает реле прямым запросом
-`POST /domofon/relays/{relay_id}/open`, без использования `LINKS.open`.
-По умолчанию добавляется `?from=app`; для проверки варианта без query-параметра
-задайте `IS74_FROM_APP=no`.
