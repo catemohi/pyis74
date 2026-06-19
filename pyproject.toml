@@ -10,7 +10,10 @@ readme = "README.md"
 requires-python = ">=3.14"
 license = "MIT"
 authors = [
-  { name = "pyis74 contributors" },
+  { name = "catemohi" },
+]
+maintainers = [
+  { name = "catemohi" },
 ]
 keywords = ["is74", "intersvyaz", "domofon", "home-assistant", "api-client"]
 classifiers = [
