@@ -61,6 +61,7 @@ packages = ["src/pyis74"]
 
 [tool.hatch.build.targets.sdist]
 include = [
+  "/docs",
   "/examples",
   "/src",
   "/tests",
