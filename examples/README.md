@@ -91,6 +91,25 @@ fixtures без анонимизации.
 export IS74_USER_DEVICE_ENDPOINT="https://td-crm.is74.ru/api/example-device-path"
 ```
 
+Для обычных camera-примеров приватные поля скрыты по умолчанию. Если нужно увидеть id,
+UUID, названия и адреса в runtime-выводе, включите:
+
+```bash
+export IS74_SHOW_PRIVATE_CAMERA_FIELDS="yes"
+```
+
+Для вывода подписанных stream/snapshot URL нужно отдельное подтверждение:
+
+```bash
+export IS74_CONFIRM_PRINT_CAMERA_STREAMS="yes"
+```
+
+Опционально можно ограничить количество камер в stream-примере:
+
+```bash
+export IS74_CAMERA_LIMIT="3"
+```
+
 ## Запуск
 
 ```bash
@@ -99,14 +118,18 @@ uv run python examples/login_lk.py
 uv run python examples/phone_auth.py
 uv run python examples/check_addresses.py
 uv run python examples/check_balance.py
+uv run python examples/get_intercom_cameras.py
 uv run python examples/inspect_domofon_relays.py
 uv run python examples/inspect_domofon_relay.py
 uv run python examples/inspect_cameras.py
 uv run python examples/inspect_user_device.py
+uv run python examples/list_camera_groups.py
+uv run python examples/list_cameras.py
 uv run python examples/list_domofon_relays.py
 uv run python examples/list_history.py
 uv run python examples/open_domofon_relay.py
 uv run python examples/open_domofon_relay_api.py
+uv run python examples/print_camera_streams.py
 ```
 
 `phone_auth.py` выводит список адресов после подтверждения телефона и получает token
@@ -145,6 +168,23 @@ CRM/LK token и не падает, если endpoint возвращает `404`.
 `/domofon/relays` и дополнительно использует UUID из `IS74_CAMERA_UUIDS`. Автообход
 групп берет только объекты с `OBJECT=GROUP` и группы из `/self-cams-with-group`, чтобы
 не принимать camera `ID` за group id.
+
+`list_camera_groups.py` использует типизированный `client.cameras.get_groups()` и
+`client.cameras.get_groups(self_cams=True)`. По умолчанию выводит только счетчики и
+тип объекта. Id и названия групп печатаются только при
+`IS74_SHOW_PRIVATE_CAMERA_FIELDS=yes`.
+
+`list_cameras.py` использует `client.cameras.get_self_cams_with_group()` и печатает
+безопасную сводку по доступности live/archive/movement и наличию HLS/MSE/snapshot.
+Названия, UUID, id и адреса скрыты без `IS74_SHOW_PRIVATE_CAMERA_FIELDS=yes`.
+
+`get_intercom_cameras.py` получает `/domofon/relays`, собирает `ENTRANCE_UID` и
+одним batch-запросом вызывает `client.cameras.get_limited_info_by_uuids(...)`.
+По умолчанию печатает только количество реле и камер плюс безопасную сводку по камерам.
+
+`print_camera_streams.py` печатает подписанные stream/snapshot URL из camera API.
+Этот пример требует `IS74_CONFIRM_PRINT_CAMERA_STREAMS=yes`, потому что ссылки могут
+давать прямой доступ к live-видео, архиву или snapshot.
 
 ## Открытие домофонных реле
 

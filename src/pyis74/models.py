@@ -784,6 +784,760 @@ class HistoryResponse:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class CameraAccessStatus:
+    """Статус доступа к отдельной функции камеры.
+
+    Args:
+        status: Доступна ли функция.
+        reason: Причина недоступности, если API ее вернул.
+        audio: Доступен ли аудиопоток в архиве, если поле есть в ответе.
+        raw: Исходный JSON-объект статуса.
+    """
+
+    status: bool | None
+    reason: str | None
+    audio: bool | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает статус доступа из JSON.
+
+        Args:
+            payload: JSON-объект статуса.
+
+        Returns:
+            Статус доступа.
+        """
+        return cls(
+            status=get_bool(payload, "STATUS"),
+            reason=get_str(payload, "REASON"),
+            audio=get_bool(payload, "AUDIO"),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CameraAccess:
+    """Права доступа к функциям камеры.
+
+    Args:
+        live: Доступ к live-видео.
+        archive: Доступ к архиву.
+        movement: Доступ к событиям движения.
+        download: Доступ к скачиванию архива.
+        ptz: Доступ к PTZ.
+        raw: Исходный JSON-объект `ACCESS`.
+    """
+
+    live: CameraAccessStatus | None
+    archive: CameraAccessStatus | None
+    movement: CameraAccessStatus | None
+    download: CameraAccessStatus | None
+    ptz: CameraAccessStatus | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает права доступа камеры из JSON.
+
+        Args:
+            payload: JSON-объект `ACCESS`.
+
+        Returns:
+            Права доступа камеры.
+        """
+        return cls(
+            live=build_camera_access_status(payload, "LIVE"),
+            archive=build_camera_access_status(payload, "ARCHIVE"),
+            movement=build_camera_access_status(payload, "MOVEMENT"),
+            download=build_camera_access_status(payload, "DOWNLOAD"),
+            ptz=build_camera_access_status(payload, "PTZ"),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CameraArchive:
+    """Параметры архивного HLS-плейлиста камеры.
+
+    Args:
+        link: Относительная ссылка архива из API.
+        start_time: Начало доступного архива в строковом формате API.
+        stop_time: Конец доступного архива в строковом формате API.
+        raw: Исходный JSON-объект `ARCHIVE`.
+    """
+
+    link: str | None
+    start_time: str | None
+    stop_time: str | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает параметры архива камеры из JSON.
+
+        Args:
+            payload: JSON-объект `ARCHIVE`.
+
+        Returns:
+            Параметры архива камеры.
+        """
+        return cls(
+            link=get_str(payload, "LINK"),
+            start_time=get_str(payload, "START_TIME"),
+            stop_time=get_str(payload, "STOP_TIME"),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CameraCoordinates:
+    """Географические координаты камеры.
+
+    Args:
+        latitude: Широта как `Decimal`, если API вернул число или строку.
+        longitude: Долгота как `Decimal`, если API вернул число или строку.
+        raw: Исходный JSON-объект координат.
+    """
+
+    latitude: Decimal | None
+    longitude: Decimal | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает координаты камеры из JSON.
+
+        Args:
+            payload: JSON-объект `COORDINATES`.
+
+        Returns:
+            Координаты камеры.
+        """
+        return cls(
+            latitude=get_decimal(payload, "LATITUDE"),
+            longitude=get_decimal(payload, "LONGITUDE"),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CameraPosition:
+    """Позиция и направление камеры.
+
+    Args:
+        azimuth: Азимут камеры.
+        latitude: Широта как `Decimal`, если API вернул число или строку.
+        longitude: Долгота как `Decimal`, если API вернул число или строку.
+        raw: Исходный JSON-объект `POSITION`.
+    """
+
+    azimuth: int | None
+    latitude: Decimal | None
+    longitude: Decimal | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает позицию камеры из JSON.
+
+        Args:
+            payload: JSON-объект `POSITION`.
+
+        Returns:
+            Позиция камеры.
+        """
+        return cls(
+            azimuth=get_int(payload, "AZIMUTH"),
+            latitude=get_decimal(payload, "LATITUDE"),
+            longitude=get_decimal(payload, "LONGITUDE"),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CameraHlsLive:
+    """Live HLS-ссылки камеры.
+
+    Args:
+        main: Основной HLS URL.
+        low_latency: Low-latency HLS URL.
+        raw: Исходный JSON-объект `MEDIA.HLS.LIVE`.
+    """
+
+    main: str | None
+    low_latency: str | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает live HLS-ссылки из JSON.
+
+        Args:
+            payload: JSON-объект `MEDIA.HLS.LIVE`.
+
+        Returns:
+            Live HLS-ссылки.
+        """
+        return cls(
+            main=get_str(payload, "MAIN"),
+            low_latency=get_str(payload, "LOW_LATENCY"),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CameraHlsMedia:
+    """HLS media-ссылки камеры.
+
+    Args:
+        live: Live HLS-ссылки.
+        archive: Архивный HLS URL.
+        raw: Исходный JSON-объект `MEDIA.HLS`.
+    """
+
+    live: CameraHlsLive | None
+    archive: str | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает HLS media-ссылки из JSON.
+
+        Args:
+            payload: JSON-объект `MEDIA.HLS`.
+
+        Returns:
+            HLS media-ссылки.
+        """
+        live_payload = get_json_object(payload, "LIVE")
+        return cls(
+            live=(
+                CameraHlsLive.from_json_object(live_payload) if live_payload is not None else None
+            ),
+            archive=get_str(payload, "ARCHIVE"),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CameraMseMedia:
+    """MSE media-ссылки камеры.
+
+    Args:
+        live: Live MSE WebSocket URL.
+        raw: Исходный JSON-объект `MEDIA.MSE`.
+    """
+
+    live: str | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает MSE media-ссылки из JSON.
+
+        Args:
+            payload: JSON-объект `MEDIA.MSE`.
+
+        Returns:
+            MSE media-ссылки.
+        """
+        return cls(live=get_str(payload, "LIVE"), raw=payload)
+
+
+@dataclass(frozen=True, slots=True)
+class CameraSnapshotLive:
+    """Live snapshot-ссылки камеры.
+
+    Args:
+        main: Основной snapshot URL.
+        lossy: Сжатый snapshot URL.
+        raw: Исходный JSON-объект `MEDIA.SNAPSHOT.LIVE`.
+    """
+
+    main: str | None
+    lossy: str | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает live snapshot-ссылки из JSON.
+
+        Args:
+            payload: JSON-объект `MEDIA.SNAPSHOT.LIVE`.
+
+        Returns:
+            Live snapshot-ссылки.
+        """
+        return cls(main=get_str(payload, "MAIN"), lossy=get_str(payload, "LOSSY"), raw=payload)
+
+
+@dataclass(frozen=True, slots=True)
+class CameraSnapshotMedia:
+    """Snapshot media-ссылки камеры.
+
+    Args:
+        live: Live snapshot-ссылки.
+        raw: Исходный JSON-объект `MEDIA.SNAPSHOT`.
+    """
+
+    live: CameraSnapshotLive | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает snapshot media-ссылки из JSON.
+
+        Args:
+            payload: JSON-объект `MEDIA.SNAPSHOT`.
+
+        Returns:
+            Snapshot media-ссылки.
+        """
+        live_payload = get_json_object(payload, "LIVE")
+        return cls(
+            live=(
+                CameraSnapshotLive.from_json_object(live_payload)
+                if live_payload is not None
+                else None
+            ),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CameraMedia:
+    """Media-ссылки камеры.
+
+    Args:
+        hls: HLS-ссылки.
+        mse: MSE-ссылки.
+        snapshot: Snapshot-ссылки.
+        raw: Исходный JSON-объект `MEDIA`.
+    """
+
+    hls: CameraHlsMedia | None
+    mse: CameraMseMedia | None
+    snapshot: CameraSnapshotMedia | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает media-ссылки камеры из JSON.
+
+        Args:
+            payload: JSON-объект `MEDIA`.
+
+        Returns:
+            Media-ссылки камеры.
+        """
+        hls_payload = get_json_object(payload, "HLS")
+        mse_payload = get_json_object(payload, "MSE")
+        snapshot_payload = get_json_object(payload, "SNAPSHOT")
+        return cls(
+            hls=CameraHlsMedia.from_json_object(hls_payload) if hls_payload is not None else None,
+            mse=CameraMseMedia.from_json_object(mse_payload) if mse_payload is not None else None,
+            snapshot=(
+                CameraSnapshotMedia.from_json_object(snapshot_payload)
+                if snapshot_payload is not None
+                else None
+            ),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CameraSnapshot:
+    """Относительные snapshot-пути камеры.
+
+    Args:
+        hd: HD snapshot path.
+        lossy: Сжатый snapshot path.
+        raw: Исходный JSON-объект `SNAPSHOT`.
+    """
+
+    hd: str | None
+    lossy: str | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает относительные snapshot-пути из JSON.
+
+        Args:
+            payload: JSON-объект `SNAPSHOT`.
+
+        Returns:
+            Относительные snapshot-пути.
+        """
+        return cls(hd=get_str(payload, "HD"), lossy=get_str(payload, "LOSSY"), raw=payload)
+
+
+@dataclass(frozen=True, slots=True)
+class CameraRealtimeWs:
+    """Realtime WebSocket-ссылки камеры.
+
+    Args:
+        combined: Общий WebSocket URL.
+        main: Main-quality WebSocket URL.
+        sub: Sub-quality WebSocket URL.
+        raw: Исходный JSON-объект `REALTIME_WS`.
+    """
+
+    combined: str | None
+    main: str | None
+    sub: str | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает realtime WebSocket-ссылки из JSON.
+
+        Args:
+            payload: JSON-объект `REALTIME_WS`.
+
+        Returns:
+            Realtime WebSocket-ссылки.
+        """
+        return cls(
+            combined=get_str(payload, "combined"),
+            main=get_str(payload, "main"),
+            sub=get_str(payload, "sub"),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CameraSupportedFeatures:
+    """Поддерживаемые функции камеры.
+
+    Args:
+        doorbell: Поддержка doorbell.
+        ptz: Поддержка PTZ.
+        setup_motion_detect: Можно ли настраивать детекцию движения.
+        voice: Поддержка голоса.
+        zoom: Поддержка zoom.
+        raw: Исходный JSON-объект `SUPPORTED_FEATURES`.
+    """
+
+    doorbell: bool | None
+    ptz: bool | None
+    setup_motion_detect: bool | None
+    voice: bool | None
+    zoom: bool | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает поддерживаемые функции камеры из JSON.
+
+        Args:
+            payload: JSON-объект `SUPPORTED_FEATURES`.
+
+        Returns:
+            Поддерживаемые функции камеры.
+        """
+        return cls(
+            doorbell=get_bool(payload, "doorbell"),
+            ptz=get_bool(payload, "ptz"),
+            setup_motion_detect=get_bool(payload, "setup_motion_detect"),
+            voice=get_bool(payload, "voice"),
+            zoom=get_bool(payload, "zoom"),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CameraVaFeatures:
+    """Функции видеоаналитики камеры.
+
+    Args:
+        annotation: Доступность annotation.
+        raw: Исходный JSON-объект `VA_FEATURES`.
+    """
+
+    annotation: bool | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает функции видеоаналитики из JSON.
+
+        Args:
+            payload: JSON-объект `VA_FEATURES`.
+
+        Returns:
+            Функции видеоаналитики.
+        """
+        return cls(annotation=get_bool(payload, "annotation"), raw=payload)
+
+
+@dataclass(frozen=True, slots=True)
+class Camera:
+    """Камера IS74.
+
+    Args:
+        camera_id: Идентификатор камеры из поля `ID`.
+        uuid: UUID камеры.
+        object_type: Тип объекта, обычно `CAMERA`.
+        name: Название камеры.
+        short_name: Короткое название камеры.
+        address: Адрес камеры.
+        porch: Номер подъезда или `None`.
+        hls: Относительный HLS path.
+        realtime_hls: Относительный realtime HLS path.
+        link_to_admin: Ссылка на админку, если доступна.
+        sleep_mode: Состояние sleep mode, если API его вернул.
+        stream_exists: Состояние stream exists, если API его вернул.
+        access: Права доступа.
+        archive: Параметры архива.
+        coordinates: Географические координаты.
+        media: Абсолютные media-ссылки.
+        position: Позиция и направление.
+        realtime_ws: Realtime WebSocket-ссылки.
+        snapshot: Относительные snapshot-пути.
+        supported_features: Поддерживаемые функции.
+        va_features: Функции видеоаналитики.
+        raw: Исходный JSON-объект камеры.
+    """
+
+    camera_id: int | None
+    uuid: str | None
+    object_type: str | None
+    name: str | None
+    short_name: str | None
+    address: str | None
+    porch: str | None
+    hls: str | None
+    realtime_hls: str | None
+    link_to_admin: str | None
+    sleep_mode: JsonValue | None
+    stream_exists: JsonValue | None
+    access: CameraAccess | None
+    archive: CameraArchive | None
+    coordinates: CameraCoordinates | None
+    media: CameraMedia | None
+    position: CameraPosition | None
+    realtime_ws: CameraRealtimeWs | None
+    snapshot: CameraSnapshot | None
+    supported_features: CameraSupportedFeatures | None
+    va_features: CameraVaFeatures | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает камеру из JSON.
+
+        Args:
+            payload: JSON-объект камеры.
+
+        Returns:
+            Камера.
+        """
+        access_payload = get_json_object(payload, "ACCESS")
+        archive_payload = get_json_object(payload, "ARCHIVE")
+        coordinates_payload = get_json_object(payload, "COORDINATES")
+        media_payload = get_json_object(payload, "MEDIA")
+        position_payload = get_json_object(payload, "POSITION")
+        realtime_ws_payload = get_json_object(payload, "REALTIME_WS")
+        snapshot_payload = get_json_object(payload, "SNAPSHOT")
+        supported_features_payload = get_json_object(payload, "SUPPORTED_FEATURES")
+        va_features_payload = get_json_object(payload, "VA_FEATURES")
+        return cls(
+            camera_id=get_int(payload, "ID"),
+            uuid=get_str(payload, "UUID"),
+            object_type=get_str(payload, "OBJECT"),
+            name=get_str(payload, "NAME"),
+            short_name=get_str(payload, "SHORT_NAME"),
+            address=get_str(payload, "ADDRESS"),
+            porch=get_str(payload, "PORCH"),
+            hls=get_str(payload, "HLS"),
+            realtime_hls=get_str(payload, "REALTIME_HLS"),
+            link_to_admin=get_str(payload, "LINK_TO_ADMIN"),
+            sleep_mode=payload.get("SLEEP_MODE"),
+            stream_exists=payload.get("STREAM_EXISTS"),
+            access=(
+                CameraAccess.from_json_object(access_payload)
+                if access_payload is not None
+                else None
+            ),
+            archive=(
+                CameraArchive.from_json_object(archive_payload)
+                if archive_payload is not None
+                else None
+            ),
+            coordinates=(
+                CameraCoordinates.from_json_object(coordinates_payload)
+                if coordinates_payload is not None
+                else None
+            ),
+            media=CameraMedia.from_json_object(media_payload)
+            if media_payload is not None
+            else None,
+            position=(
+                CameraPosition.from_json_object(position_payload)
+                if position_payload is not None
+                else None
+            ),
+            realtime_ws=(
+                CameraRealtimeWs.from_json_object(realtime_ws_payload)
+                if realtime_ws_payload is not None
+                else None
+            ),
+            snapshot=(
+                CameraSnapshot.from_json_object(snapshot_payload)
+                if snapshot_payload is not None
+                else None
+            ),
+            supported_features=(
+                CameraSupportedFeatures.from_json_object(supported_features_payload)
+                if supported_features_payload is not None
+                else None
+            ),
+            va_features=(
+                CameraVaFeatures.from_json_object(va_features_payload)
+                if va_features_payload is not None
+                else None
+            ),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CameraGroup:
+    """Группа камер IS74.
+
+    Args:
+        group_id: Идентификатор группы как строка.
+        name: Название группы.
+        object_type: Тип объекта, обычно `GROUP`.
+        raw: Исходный JSON-объект группы.
+    """
+
+    group_id: str | None
+    name: str | None
+    object_type: str | None
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает группу камер из JSON.
+
+        Args:
+            payload: JSON-объект группы.
+
+        Returns:
+            Группа камер.
+        """
+        return cls(
+            group_id=get_str_id(payload, "ID") or get_str_id(payload, "id"),
+            name=get_str(payload, "NAME") or get_str(payload, "groupName"),
+            object_type=get_str(payload, "OBJECT"),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class SelfCameraGroup:
+    """Группа камер пользователя из `/self-cams-with-group`.
+
+    Args:
+        group_id: Идентификатор группы как строка.
+        group_name: Название группы.
+        is_management_company_owns: Признак принадлежности УК.
+        cameras: Камеры внутри группы.
+        raw: Исходный JSON-объект группы.
+    """
+
+    group_id: str | None
+    group_name: str | None
+    is_management_company_owns: bool | None
+    cameras: tuple[Camera, ...]
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает группу камер пользователя из JSON.
+
+        Args:
+            payload: JSON-объект группы из `/self-cams-with-group`.
+
+        Returns:
+            Группа камер пользователя.
+        """
+        return cls(
+            group_id=get_str_id(payload, "id"),
+            group_name=get_str(payload, "groupName"),
+            is_management_company_owns=get_bool(payload, "isManagementCompanyOwns"),
+            cameras=tuple(
+                Camera.from_json_object(camera)
+                for camera in get_json_object_list(payload, "cameras")
+            ),
+            raw=payload,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CameraGroupContent:
+    """Содержимое группы камер.
+
+    Args:
+        groups: Дочерние группы.
+        cameras: Камеры группы.
+        raw: Исходный JSON-ответ `get-group/{id}`.
+    """
+
+    groups: tuple[CameraGroup, ...]
+    cameras: tuple[Camera, ...]
+    raw: JsonValue
+
+
+@dataclass(frozen=True, slots=True)
+class CameraLimitedInfo:
+    """Ответ `/api/limited-info-by-uuid`.
+
+    Args:
+        cameras: Камеры, найденные по переданным UUID.
+        raw: Исходный JSON-объект ответа.
+    """
+
+    cameras: tuple[Camera, ...]
+    raw: JsonObject
+
+    @classmethod
+    def from_json_object(cls, payload: JsonObject) -> Self:
+        """Создает limited-info ответ из JSON.
+
+        Args:
+            payload: JSON-объект, где ключами обычно являются id камер.
+
+        Returns:
+            Limited-info ответ.
+        """
+        cameras = tuple(
+            Camera.from_json_object(item) for item in payload.values() if isinstance(item, dict)
+        )
+        return cls(cameras=cameras, raw=payload)
+
+
+def build_camera_access_status(payload: JsonObject, key: str) -> CameraAccessStatus | None:
+    """Создает статус доступа камеры из вложенного объекта.
+
+    Args:
+        payload: JSON-объект `ACCESS`.
+        key: Ключ вложенного статуса.
+
+    Returns:
+        Статус доступа или `None`.
+    """
+    status_payload = get_json_object(payload, key)
+    if status_payload is None:
+        return None
+    return CameraAccessStatus.from_json_object(status_payload)
+
+
 def get_str(payload: JsonObject, key: str) -> str | None:
     """Возвращает строковое поле из JSON-объекта.
 
@@ -797,6 +1551,24 @@ def get_str(payload: JsonObject, key: str) -> str | None:
     value = payload.get(key)
     if isinstance(value, str):
         return value
+    return None
+
+
+def get_str_id(payload: JsonObject, key: str) -> str | None:
+    """Возвращает строковое представление id из JSON-объекта.
+
+    Args:
+        payload: JSON-объект.
+        key: Ключ поля id.
+
+    Returns:
+        Строковый id или `None`.
+    """
+    value = payload.get(key)
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int | str):
+        return str(value)
     return None
 
 

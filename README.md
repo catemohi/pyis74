@@ -51,7 +51,7 @@ print(balance.balance)
 ```
 
 Больше сценариев есть в каталоге [`examples`](examples/): авторизация через логин/пароль,
-phone auth, проверка адреса, проверка баланса и история событий.
+phone auth, проверка адреса, проверка баланса, история событий и camera API.
 
 Домофонные примеры разделены на два пути:
 
@@ -64,10 +64,18 @@ phone auth, проверка адреса, проверка баланса и и
 История событий доступна через `client.history.get_events(...)`. Метод использует
 CRM/LK API и при необходимости получает LK token через текущий mobile token.
 
-Camera API и CRM user-device пока изучаются через диагностические примеры
-`examples/inspect_cameras.py` и `examples/inspect_user_device.py`. По умолчанию они
-печатают безопасную сводку без адресов, UUID, MAC-адресов и подписанных URL. Сырой JSON
-включается только явным `IS74_RAW_JSON=yes`.
+Camera API доступен через `client.cameras`:
+
+- `get_self_cams_with_group()`;
+- `get_groups(self_cams=False)`;
+- `get_group(group_id)`;
+- `get_limited_info_by_uuid(uuid)`;
+- `get_limited_info_by_uuids(uuids)`.
+
+Диагностические примеры `examples/inspect_cameras.py` и
+`examples/inspect_user_device.py` по умолчанию печатают безопасную сводку без адресов,
+UUID, MAC-адресов и подписанных URL. Сырой JSON включается только явным
+`IS74_RAW_JSON=yes`.
 
 ## Разработка
 

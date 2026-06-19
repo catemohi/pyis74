@@ -11,6 +11,7 @@ import httpx
 
 from pyis74.account import AccountAPI, SyncAccountAPI
 from pyis74.auth import AuthAPI, SyncAuthAPI
+from pyis74.cameras import CamerasAPI, SyncCamerasAPI
 from pyis74.domofon import DomofonAPI, SyncDomofonAPI
 from pyis74.endpoints import join_url
 from pyis74.exceptions import IS74AuthRequiredError, IS74Error, IS74TransportError
@@ -59,6 +60,7 @@ class IS74Async:
         self.account: AccountAPI = AccountAPI(self)
         self.domofon: DomofonAPI = DomofonAPI(self)
         self.history: HistoryAPI = HistoryAPI(self)
+        self.cameras: CamerasAPI = CamerasAPI(self)
 
     async def __aenter__(self) -> IS74Async:
         """Возвращает асинхронный клиент для context manager."""
@@ -263,6 +265,7 @@ class IS74:
     account: SyncAccountAPI = field(init=False)
     domofon: SyncDomofonAPI = field(init=False)
     history: SyncHistoryAPI = field(init=False)
+    cameras: SyncCamerasAPI = field(init=False)
 
     def __post_init__(self) -> None:
         """Инициализирует синхронные домены API."""
@@ -270,6 +273,7 @@ class IS74:
         self.account = SyncAccountAPI(self)
         self.domofon = SyncDomofonAPI(self)
         self.history = SyncHistoryAPI(self)
+        self.cameras = SyncCamerasAPI(self)
 
     def request(
         self,

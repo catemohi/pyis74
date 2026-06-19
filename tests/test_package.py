@@ -35,3 +35,12 @@ def test_package_exports_history_models() -> None:
     assert pyis74.HistoryEvent is not None
     assert pyis74.HistoryEventParams is not None
     assert pyis74.HistoryResponse is not None
+
+
+def test_package_exports_camera_models() -> None:
+    """Проверяет, что пакет экспортирует модели камер."""
+    assert pyis74.Camera is not None
+    assert pyis74.CameraGroup is not None
+    assert pyis74.CameraGroupContent is not None
+    assert pyis74.CameraLimitedInfo is not None
+    assert pyis74.SelfCameraGroup is not None
