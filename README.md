@@ -50,6 +50,9 @@ balance = client.account.get_balance()
 print(balance.balance)
 ```
 
+Больше сценариев есть в каталоге [`examples`](examples/): авторизация через логин/пароль,
+phone auth, проверка адреса и проверка баланса.
+
 ## Разработка
 
 ```bash

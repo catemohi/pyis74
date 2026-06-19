@@ -61,6 +61,7 @@ packages = ["src/pyis74"]
 
 [tool.hatch.build.targets.sdist]
 include = [
+  "/examples",
   "/src",
   "/tests",
   "/README.md",
@@ -113,6 +114,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"examples/**/*.py" = ["T201"]
 "tests/**/*.py" = ["D", "S101"]
 
 [tool.ruff.lint.pydocstyle]
