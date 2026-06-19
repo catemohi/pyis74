@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 
 from _common import authorize_client, optional_env, read_bool_env, require_env_value
-
 from pyis74 import IS74Async
 from pyis74.models import Camera
 

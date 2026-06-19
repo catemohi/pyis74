@@ -5,7 +5,7 @@ from urllib.parse import parse_qs
 import pytest
 from pytest_httpx import HTTPXMock
 
-from pyis74 import IS74, IS74APIError, IS74Async, IS74AuthRequiredError, endpoints
+from pyis74 import IS74, IS74APIError, IS74Async, IS74AuthRequiredError, IS74HTTPError, endpoints
 from pyis74.models import DomofonRelay
 from pyis74.types import JsonObject
 
@@ -47,6 +47,13 @@ def build_api_relay_payload() -> JsonObject:
         "STATUS_CODE": "0",
         "STATUS_TEXT": "OK",
     }
+
+
+def build_custom_domain_api_relay_payload() -> JsonObject:
+    """Возвращает fixture API-реле с кастомным доменом."""
+    payload = build_api_relay_payload()
+    payload["LINKS"] = {"open": f"https://api.example.test/domofon/relays/{API_RELAY_ID}/open"}
+    return payload
 
 
 def build_crm_relay_payload() -> JsonObject:
@@ -229,6 +236,28 @@ async def test_open_relay_by_api_id_can_skip_from_app(httpx_mock: HTTPXMock) -> 
 
 
 @pytest.mark.asyncio
+async def test_open_relay_uses_custom_base_domain_for_from_app(
+    httpx_mock: HTTPXMock,
+) -> None:
+    """Проверяет распознавание API-open ссылки на кастомном домене."""
+    httpx_mock.add_response(
+        method="POST",
+        url=f"https://api.example.test/domofon/relays/{API_RELAY_ID}/open?from=app",
+        status_code=HTTP_NO_CONTENT,
+    )
+    relay = DomofonRelay.from_json_object(build_custom_domain_api_relay_payload())
+
+    async with IS74Async(
+        backoff_factor=0,
+        base_domain="example.test",
+        mobile_token="mobile-token",
+    ) as client:
+        result = await client.domofon.open_relay(relay)
+
+    assert result.status_code == HTTP_NO_CONTENT
+
+
+@pytest.mark.asyncio
 async def test_open_relay_by_id_uses_crm_open_link(httpx_mock: HTTPXMock) -> None:
     """Проверяет открытие CRM-реле через LK token и ссылку из списка реле."""
     crm_url = f"https://td-crm.is74.ru/api/open/{CRM_MAC}/1"
@@ -266,6 +295,38 @@ def test_sync_client_gets_relays(httpx_mock: HTTPXMock) -> None:
     relays = IS74(backoff_factor=0, mobile_token="mobile-token").domofon.get_relays()
 
     assert relays[0].relay_id == API_RELAY_ID
+
+
+@pytest.mark.asyncio
+async def test_open_relay_disables_retry_for_api_open(httpx_mock: HTTPXMock) -> None:
+    """Проверяет, что side-effect open запрос не повторяется."""
+    httpx_mock.add_response(
+        method="POST",
+        url=f"https://api.is74.ru/domofon/relays/{API_RELAY_ID}/open?from=app",
+        status_code=500,
+    )
+    relay = DomofonRelay.from_json_object(build_api_relay_payload())
+
+    async with IS74Async(max_retries=1, backoff_factor=0, mobile_token="mobile-token") as client:
+        with pytest.raises(IS74HTTPError):
+            await client.domofon.open_relay(relay)
+
+    assert len(httpx_mock.get_requests()) == 1
+
+
+@pytest.mark.asyncio
+async def test_open_relay_disables_retry_for_crm_open(httpx_mock: HTTPXMock) -> None:
+    """Проверяет, что CRM side-effect open запрос не повторяется."""
+    crm_url = f"https://td-crm.is74.ru/api/open/{CRM_MAC}/1"
+    httpx_mock.add_response(method="POST", url=endpoints.CRM_AUTH_LK, json={"TOKEN": "lk-token"})
+    httpx_mock.add_response(method="GET", url=crm_url, status_code=500)
+    relay = DomofonRelay.from_json_object(build_crm_relay_payload())
+
+    async with IS74Async(max_retries=1, backoff_factor=0, mobile_token="mobile-token") as client:
+        with pytest.raises(IS74HTTPError):
+            await client.domofon.open_relay(relay)
+
+    assert [request.method for request in httpx_mock.get_requests()] == ["POST", "GET"]
 
 
 @pytest.mark.asyncio

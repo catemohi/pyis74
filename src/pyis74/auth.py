@@ -5,7 +5,6 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING, Final
 
-from pyis74 import endpoints
 from pyis74.exceptions import IS74AuthRequiredError
 from pyis74.models import LkToken, MobileToken, PhoneConfirmationCheck, PhoneConfirmationStart
 from pyis74.options import ClientRequestOptions
@@ -40,7 +39,7 @@ class AuthAPI:
         """
         payload = await self._client.request(
             "POST",
-            endpoints.AUTH_MOBILE,
+            self._client.urls.auth_mobile,
             ClientRequestOptions(json_body={"username": username, "password": password}),
         )
         token = MobileToken.from_json_object(normalize_json_object(payload))
@@ -51,7 +50,7 @@ class AuthAPI:
         """Получает CRM/LK token по текущему mobile access token.
 
         Args:
-            buyer_id: Идентификатор buyer для `td-crm.is74.ru/api/auth-lk`.
+            buyer_id: Идентификатор buyer для CRM auth endpoint.
 
         Returns:
             CRM/LK access token.
@@ -66,7 +65,7 @@ class AuthAPI:
 
         payload = await self._client.request(
             "POST",
-            endpoints.CRM_AUTH_LK,
+            self._client.urls.crm_auth_lk,
             ClientRequestOptions(json_body={"buyerId": buyer_id, "token": mobile_token}),
         )
         token = LkToken.from_json_object(normalize_json_object(payload))
@@ -92,7 +91,7 @@ class AuthAPI:
         actual_device_id = device_id or generate_device_id()
         payload = await self._client.request(
             "POST",
-            endpoints.AUTH_SEND_SMS,
+            self._client.urls.auth_send_sms,
             ClientRequestOptions(
                 json_body={"phone": normalized_phone, "uniqueDeviceId": actual_device_id}
             ),
@@ -121,7 +120,7 @@ class AuthAPI:
         """
         payload = await self._client.request(
             "POST",
-            endpoints.AUTH_CONFIRM,
+            self._client.urls.auth_confirm,
             ClientRequestOptions(
                 json_body={
                     "confirmCode": code,
@@ -153,7 +152,7 @@ class AuthAPI:
         """
         payload = await self._client.request(
             "POST",
-            endpoints.AUTH_GET_TOKEN,
+            self._client.urls.auth_get_token,
             ClientRequestOptions(
                 json_body={
                     "authId": auth_id,
@@ -193,7 +192,7 @@ class SyncAuthAPI:
         """Получает CRM/LK token по текущему mobile access token.
 
         Args:
-            buyer_id: Идентификатор buyer для `td-crm.is74.ru/api/auth-lk`.
+            buyer_id: Идентификатор buyer для CRM auth endpoint.
 
         Returns:
             CRM/LK access token.

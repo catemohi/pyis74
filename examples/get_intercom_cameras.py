@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 
 from _common import authorize_client, read_bool_env
-
 from pyis74 import IS74Async
 from pyis74.models import Camera, DomofonRelayCameras
 

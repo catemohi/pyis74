@@ -3,7 +3,14 @@
 import pytest
 from pytest_httpx import HTTPXMock
 
-from pyis74 import IS74, ClientRequestOptions, IS74Async, IS74AuthRequiredError, IS74Error
+from pyis74 import (
+    IS74,
+    ClientRequestOptions,
+    IS74Async,
+    IS74AuthRequiredError,
+    IS74Error,
+    IS74HTTPError,
+)
 from pyis74.endpoints import BaseUrl
 
 
@@ -34,6 +41,39 @@ async def test_async_client_uses_custom_base_url(httpx_mock: HTTPXMock) -> None:
     )
 
     async with IS74Async(backoff_factor=0) as client:
+        payload = await client.request(
+            "GET",
+            "/api/self-cams-with-group",
+            ClientRequestOptions(base_url=BaseUrl.CAMS),
+        )
+
+    assert payload == []
+
+
+@pytest.mark.asyncio
+async def test_async_client_uses_custom_base_domain_for_default_api(
+    httpx_mock: HTTPXMock,
+) -> None:
+    """Проверяет, что относительный endpoint идет в API кастомного домена."""
+    httpx_mock.add_response(url="https://api.example.test/user/user", json={"USER_ID": 42})
+
+    async with IS74Async(backoff_factor=0, base_domain="example.test") as client:
+        payload = await client.request("GET", "/user/user")
+
+    assert payload == {"USER_ID": 42}
+
+
+@pytest.mark.asyncio
+async def test_async_client_resolves_base_url_enum_with_custom_domain(
+    httpx_mock: HTTPXMock,
+) -> None:
+    """Проверяет резолв `BaseUrl` через домен клиента."""
+    httpx_mock.add_response(
+        url="https://cams.example.test/api/self-cams-with-group",
+        json=[],
+    )
+
+    async with IS74Async(backoff_factor=0, base_domain="example.test") as client:
         payload = await client.request(
             "GET",
             "/api/self-cams-with-group",
@@ -133,8 +173,33 @@ def test_sync_client_request(httpx_mock: HTTPXMock) -> None:
     assert payload == {"USER_ID": 42}
 
 
+def test_sync_client_uses_custom_base_domain(httpx_mock: HTTPXMock) -> None:
+    """Проверяет прокидывание домена в одноразовый async-клиент."""
+    httpx_mock.add_response(url="https://api.example.test/user/user", json={"USER_ID": 42})
+
+    payload = IS74(backoff_factor=0, base_domain="example.test").request("GET", "/user/user")
+
+    assert payload == {"USER_ID": 42}
+
+
 @pytest.mark.asyncio
 async def test_sync_client_rejects_running_event_loop() -> None:
     """Проверяет защиту от синхронного клиента внутри работающего event loop."""
     with pytest.raises(IS74Error, match="use IS74Async"):
         IS74().request("GET", "/user/user")
+
+
+@pytest.mark.asyncio
+async def test_async_client_passes_request_retry_override(httpx_mock: HTTPXMock) -> None:
+    """Проверяет передачу request-level retry настройки в transport."""
+    httpx_mock.add_response(url="https://api.is74.ru/user/user", status_code=500)
+
+    async with IS74Async(max_retries=1, backoff_factor=0) as client:
+        with pytest.raises(IS74HTTPError):
+            await client.request(
+                "GET",
+                "/user/user",
+                ClientRequestOptions(max_retries=0),
+            )
+
+    assert len(httpx_mock.get_requests()) == 1

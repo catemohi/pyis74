@@ -1,6 +1,8 @@
 """Тесты URL endpoint-слоя."""
 
-from pyis74.endpoints import BaseUrl, is_absolute_url, join_url
+import pytest
+
+from pyis74.endpoints import BaseUrl, IS74ServiceUrls, is_absolute_url, join_url
 
 
 def test_is_absolute_url_detects_http_urls() -> None:
@@ -23,3 +25,31 @@ def test_join_url_keeps_absolute_url() -> None:
     url = "https://cams.is74.ru/api/self-cams-with-group"
 
     assert join_url(BaseUrl.API, url) == url
+
+
+def test_service_urls_builds_urls_from_base_domain() -> None:
+    """Проверяет сборку URL сервисов от корневого домена."""
+    urls = IS74ServiceUrls(base_domain="example.test")
+
+    assert urls.api == "https://api.example.test"
+    assert urls.cams == "https://cams.example.test"
+    assert urls.crm == "https://td-crm.example.test"
+    assert urls.domofon_relays == "https://api.example.test/domofon/relays"
+    assert urls.resolve_base_url(BaseUrl.CAMS) == "https://cams.example.test"
+
+
+def test_service_urls_accepts_url_like_base_domain() -> None:
+    """Проверяет нормализацию домена, переданного как URL."""
+    urls = IS74ServiceUrls(base_domain="https://example.test/")
+
+    assert urls.base_domain == "example.test"
+    assert urls.api == "https://api.example.test"
+
+
+def test_service_urls_rejects_invalid_values() -> None:
+    """Проверяет базовую валидацию домена и схемы."""
+    with pytest.raises(ValueError, match="base_domain"):
+        IS74ServiceUrls(base_domain=" ")
+
+    with pytest.raises(ValueError, match="scheme"):
+        IS74ServiceUrls(base_domain="example.test", scheme="ftp")

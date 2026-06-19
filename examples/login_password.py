@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 
 from _common import mask_secret, require_env
-
 from pyis74 import IS74Async
 
 

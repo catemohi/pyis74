@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pyis74 import endpoints
 from pyis74.models import AccountSummary, Address, Balance, ServiceStatus, UserInfo
 from pyis74.options import ClientRequestOptions
 from pyis74.types import normalize_json_object
@@ -30,7 +29,7 @@ class AccountAPI:
         Returns:
             Статус сервисов.
         """
-        payload = await self._client.request_mobile("GET", endpoints.USER_STATUS)
+        payload = await self._client.request_mobile("GET", self._client.urls.user_status)
         return ServiceStatus.from_json_object(normalize_json_object(payload))
 
     async def get_user(self) -> UserInfo:
@@ -39,7 +38,7 @@ class AccountAPI:
         Returns:
             Информация о пользователе.
         """
-        payload = await self._client.request_mobile("GET", endpoints.USER_INFO)
+        payload = await self._client.request_mobile("GET", self._client.urls.user_info)
         return UserInfo.from_json_object(normalize_json_object(payload))
 
     async def get_address(self) -> Address:
@@ -48,7 +47,7 @@ class AccountAPI:
         Returns:
             Адрес установки услуг.
         """
-        payload = await self._client.request_mobile("GET", endpoints.USER_ADDRESS)
+        payload = await self._client.request_mobile("GET", self._client.urls.user_address)
         return Address.from_json_object(normalize_json_object(payload))
 
     async def get_balance(self) -> Balance:
@@ -59,7 +58,7 @@ class AccountAPI:
         """
         payload = await self._client.request_mobile(
             "GET",
-            endpoints.USER_BALANCE,
+            self._client.urls.user_balance,
             ClientRequestOptions(headers={"Accept": "application/json; version=v2"}),
         )
         return Balance.from_json_object(normalize_json_object(payload))

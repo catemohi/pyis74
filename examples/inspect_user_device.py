@@ -7,7 +7,6 @@ import json
 from collections.abc import Iterable, Iterator
 
 from _common import authorize_client, optional_env, read_bool_env
-
 from pyis74 import IS74Async, IS74Error, IS74HTTPError
 from pyis74.endpoints import CRM_USER_DEVICE, BaseUrl, join_url
 from pyis74.types import JsonObject, JsonValue

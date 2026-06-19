@@ -6,7 +6,6 @@ from collections.abc import Iterable
 from datetime import date
 from typing import TYPE_CHECKING, Final
 
-from pyis74 import endpoints
 from pyis74.models import HistoryEvent, HistoryEventKind, HistoryResponse
 from pyis74.options import ClientRequestOptions
 from pyis74.types import QueryParams, normalize_json_object
@@ -18,6 +17,8 @@ DEFAULT_ACTIVITY_KINDS: Final[tuple[HistoryEventKind, ...]] = (
     HistoryEventKind.OPEN,
     HistoryEventKind.CALL,
 )
+DEFAULT_HISTORY_PER_PAGE: Final = 20
+FIRST_HISTORY_PAGE: Final = 1
 
 
 class HistoryAPI:
@@ -41,9 +42,8 @@ class HistoryAPI:
     ) -> HistoryResponse:
         """Возвращает страницу истории событий.
 
-        История находится в CRM API `td-crm.is74.ru`, поэтому метод использует LK
-        token. Если LK token еще не получен, клиент попробует получить его через
-        текущий mobile token.
+        История находится в CRM API, поэтому метод использует LK token. Если LK token
+        еще не получен, клиент попробует получить его через текущий mobile token.
 
         Args:
             from_date: Начальная дата фильтра в формате `YYYY-MM-DD` или `date`.
@@ -56,7 +56,7 @@ class HistoryAPI:
         """
         payload = await self._client.request_lk(
             "GET",
-            endpoints.CRM_HISTORY,
+            self._client.urls.crm_history,
             ClientRequestOptions(
                 params=build_history_params(
                     from_date=from_date,
@@ -67,6 +67,52 @@ class HistoryAPI:
             ),
         )
         return HistoryResponse.from_json_object(normalize_json_object(payload))
+
+    async def get_events_until_limit(
+        self,
+        *,
+        limit: int,
+        from_date: date | str | None = None,
+        to_date: date | str | None = None,
+        start_page: int = FIRST_HISTORY_PAGE,
+        per_page: int = DEFAULT_HISTORY_PER_PAGE,
+    ) -> tuple[HistoryEvent, ...]:
+        """Добирает страницы истории до заданного количества событий.
+
+        Args:
+            limit: Максимальное количество событий.
+            from_date: Начальная дата фильтра в формате `YYYY-MM-DD` или `date`.
+            to_date: Конечная дата фильтра в формате `YYYY-MM-DD` или `date`.
+            start_page: Первая страница для запроса.
+            per_page: Размер страницы.
+
+        Returns:
+            Кортеж событий, собранных из одной или нескольких страниц.
+
+        Raises:
+            ValueError: `limit`, `start_page` или `per_page` меньше единицы.
+        """
+        validate_history_pagination(limit=limit, start_page=start_page, per_page=per_page)
+        events: list[HistoryEvent] = []
+        page = start_page
+
+        while len(events) < limit:
+            history = await self.get_events(
+                from_date=from_date,
+                to_date=to_date,
+                page=page,
+                per_page=per_page,
+            )
+            if not history.events:
+                break
+
+            remaining = limit - len(events)
+            events.extend(history.events[:remaining])
+            if should_stop_history_pagination(history=history, page=page, per_page=per_page):
+                break
+            page += 1
+
+        return tuple(events)
 
     async def get_recent_activity(  # noqa: PLR0913
         self,
@@ -187,6 +233,37 @@ class SyncHistoryAPI:
             )
         )
 
+    def get_events_until_limit(
+        self,
+        *,
+        limit: int,
+        from_date: date | str | None = None,
+        to_date: date | str | None = None,
+        start_page: int = FIRST_HISTORY_PAGE,
+        per_page: int = DEFAULT_HISTORY_PER_PAGE,
+    ) -> tuple[HistoryEvent, ...]:
+        """Добирает страницы истории до заданного количества событий.
+
+        Args:
+            limit: Максимальное количество событий.
+            from_date: Начальная дата фильтра в формате `YYYY-MM-DD` или `date`.
+            to_date: Конечная дата фильтра в формате `YYYY-MM-DD` или `date`.
+            start_page: Первая страница для запроса.
+            per_page: Размер страницы.
+
+        Returns:
+            Кортеж событий, собранных из одной или нескольких страниц.
+        """
+        return self._client._run(
+            lambda client: client.history.get_events_until_limit(
+                limit=limit,
+                from_date=from_date,
+                to_date=to_date,
+                start_page=start_page,
+                per_page=per_page,
+            )
+        )
+
 
 def build_history_params(
     *,
@@ -226,3 +303,46 @@ def format_history_date(value: date | str | None) -> str | None:
     if isinstance(value, date):
         return value.isoformat()
     return value
+
+
+def validate_history_pagination(*, limit: int, start_page: int, per_page: int) -> None:
+    """Проверяет параметры постраничного чтения истории.
+
+    Args:
+        limit: Максимальное количество событий.
+        start_page: Первая страница.
+        per_page: Размер страницы.
+
+    Raises:
+        ValueError: Любой параметр меньше единицы.
+    """
+    if limit < 1:
+        msg = "limit must be greater than or equal to 1."
+        raise ValueError(msg)
+    if start_page < 1:
+        msg = "start_page must be greater than or equal to 1."
+        raise ValueError(msg)
+    if per_page < 1:
+        msg = "per_page must be greater than or equal to 1."
+        raise ValueError(msg)
+
+
+def should_stop_history_pagination(
+    *,
+    history: HistoryResponse,
+    page: int,
+    per_page: int,
+) -> bool:
+    """Проверяет, нужно ли остановить добор страниц истории.
+
+    Args:
+        history: Последняя полученная страница.
+        page: Номер последней страницы.
+        per_page: Размер страницы.
+
+    Returns:
+        `True`, если следующую страницу запрашивать не нужно.
+    """
+    if len(history.events) < per_page:
+        return True
+    return history.count is not None and page * per_page >= history.count

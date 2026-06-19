@@ -10,7 +10,6 @@ from _common import (
     read_address_index,
     require_env,
 )
-
 from pyis74 import IS74Async
 
 

@@ -6,7 +6,7 @@ import json
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
-from pyis74 import endpoints
+from pyis74.endpoints import IS74ServiceUrls
 from pyis74.exceptions import IS74APIError
 from pyis74.models import Camera, DomofonOpenResult, DomofonRelay, DomofonRelayCameras
 from pyis74.options import ClientRequestOptions
@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from pyis74.client import IS74, IS74Async
 
 JSON_HEADERS: dict[str, str] = {"Content-Type": "application/json"}
+NO_RETRY_MAX_RETRIES = 0
 
 
 class DomofonAPI:
@@ -38,7 +39,7 @@ class DomofonAPI:
         Raises:
             IS74APIError: API вернул не список реле или список содержит не объект.
         """
-        payload = await self._client.request_mobile("GET", endpoints.DOMOFON_RELAYS)
+        payload = await self._client.request_mobile("GET", self._client.urls.domofon_relays)
         if not isinstance(payload, list):
             msg = "IS74 domofon relays response is not a list."
             raise IS74APIError(msg, payload)
@@ -67,7 +68,7 @@ class DomofonAPI:
         """
         payload = await self._client.request_mobile(
             "GET",
-            endpoints.DOMOFON_RELAY_TEMPLATE.format(relay_id=relay_id),
+            self._client.urls.domofon_relay_template.format(relay_id=relay_id),
         )
         try:
             relay_payload = normalize_json_object(payload)
@@ -128,14 +129,14 @@ class DomofonAPI:
         `LINKS.open`, если ссылка есть в ответе API. Это основной путь для открытия,
         потому что разные реле могут обслуживаться разными backend-сервисами.
 
-        Если `LINKS.open` указывает на `api.is74.ru`, клиент выполняет mobile `POST`
-        на URL открытия. Для таких запросов добавляется `Content-Type:
+        Если `LINKS.open` указывает на mobile API текущего домена, клиент выполняет
+        mobile `POST` на URL открытия. Для таких запросов добавляется `Content-Type:
         application/json`; query-параметр `from=app` добавляется только когда
         `from_app=True`.
 
-        Если `LINKS.open` указывает на `td-crm.is74.ru`, клиент получает LK token через
-        `AuthAPI.get_lk_token()` и выполняет CRM `GET` с этим token. В этом режиме
-        `from_app` не используется.
+        Если `LINKS.open` указывает на CRM API текущего домена, клиент получает LK
+        token через `AuthAPI.get_lk_token()` и выполняет CRM `GET` с этим token. В
+        этом режиме `from_app` не используется.
 
         Если `LINKS.open` отсутствует, метод строит fallback URL
         `/domofon/relays/{relay_id}/open` по `RELAY_ID` и использует mobile `POST`.
@@ -150,14 +151,21 @@ class DomofonAPI:
         Raises:
             IS74APIError: У реле нет ссылки открытия и нет `RELAY_ID`.
         """
-        target = relay.open_url or build_domofon_open_url(relay)
-        if is_crm_open_url(target):
-            response = await self._client._request_lk_response("GET", target)
+        target = relay.open_url or build_domofon_open_url(relay, self._client.urls)
+        if is_crm_open_url(target, self._client.urls):
+            response = await self._client._request_lk_response(
+                "GET",
+                target,
+                ClientRequestOptions(max_retries=NO_RETRY_MAX_RETRIES),
+            )
             return build_open_result(response.status_code, response.text, response.content)
 
         options = ClientRequestOptions(
             headers=JSON_HEADERS,
-            params={"from": "app"} if should_add_from_app(target, from_app=from_app) else None,
+            params={"from": "app"}
+            if should_add_from_app(target, from_app=from_app, urls=self._client.urls)
+            else None,
+            max_retries=NO_RETRY_MAX_RETRIES,
         )
         response = await self._client._request_mobile_response("POST", target, options)
         return build_open_result(response.status_code, response.text, response.content)
@@ -223,10 +231,11 @@ class DomofonAPI:
         Returns:
             Результат успешного HTTP-запроса открытия.
         """
-        target = endpoints.DOMOFON_RELAY_OPEN_TEMPLATE.format(relay_id=relay_id)
+        target = self._client.urls.domofon_relay_open_template.format(relay_id=relay_id)
         options = ClientRequestOptions(
             headers=JSON_HEADERS,
             params={"from": "app"} if from_app else None,
+            max_retries=NO_RETRY_MAX_RETRIES,
         )
         response = await self._client._request_mobile_response("POST", target, options)
         return build_open_result(response.status_code, response.text, response.content)
@@ -352,14 +361,15 @@ class SyncDomofonAPI:
         )
 
 
-def build_domofon_open_url(relay: DomofonRelay) -> str:
+def build_domofon_open_url(relay: DomofonRelay, urls: IS74ServiceUrls | None = None) -> str:
     """Возвращает fallback URL открытия реле.
 
     Args:
         relay: Домофонное реле.
+        urls: URL-конфигурация клиента.
 
     Returns:
-        URL открытия через `api.is74.ru`.
+        URL открытия через mobile API.
 
     Raises:
         IS74APIError: У реле нет `RELAY_ID`.
@@ -367,7 +377,8 @@ def build_domofon_open_url(relay: DomofonRelay) -> str:
     if relay.relay_id is None:
         msg = "IS74 domofon relay does not contain open URL or RELAY_ID."
         raise IS74APIError(msg, relay.raw)
-    return endpoints.DOMOFON_RELAY_OPEN_TEMPLATE.format(relay_id=relay.relay_id)
+    service_urls = urls or IS74ServiceUrls()
+    return service_urls.domofon_relay_open_template.format(relay_id=relay.relay_id)
 
 
 def collect_unique_entrance_uids(relays: Iterable[DomofonRelay]) -> tuple[str, ...]:
@@ -383,29 +394,38 @@ def collect_unique_entrance_uids(relays: Iterable[DomofonRelay]) -> tuple[str, .
     return tuple(dict.fromkeys(entrance_uids))
 
 
-def should_add_from_app(target: str, *, from_app: bool) -> bool:
+def should_add_from_app(
+    target: str,
+    *,
+    from_app: bool,
+    urls: IS74ServiceUrls | None = None,
+) -> bool:
     """Проверяет, нужно ли добавить query-параметр `from=app`.
 
     Args:
         target: URL открытия реле.
         from_app: Пользовательское разрешение добавлять параметр.
+        urls: URL-конфигурация клиента.
 
     Returns:
         `True`, если параметр нужно добавить.
     """
-    return from_app and target.startswith(str(endpoints.BaseUrl.API))
+    service_urls = urls or IS74ServiceUrls()
+    return from_app and service_urls.is_api_url(target)
 
 
-def is_crm_open_url(target: str) -> bool:
+def is_crm_open_url(target: str, urls: IS74ServiceUrls | None = None) -> bool:
     """Проверяет, что ссылка открытия относится к CRM API.
 
     Args:
         target: URL открытия реле.
+        urls: URL-конфигурация клиента.
 
     Returns:
-        `True`, если ссылка начинается с `td-crm.is74.ru`.
+        `True`, если ссылка начинается с CRM base URL.
     """
-    return target.startswith(str(endpoints.BaseUrl.CRM))
+    service_urls = urls or IS74ServiceUrls()
+    return service_urls.is_crm_url(target)
 
 
 def build_open_result(status_code: int, response_text: str, content: bytes) -> DomofonOpenResult:

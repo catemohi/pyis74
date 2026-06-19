@@ -95,3 +95,19 @@ def test_redact_headers_masks_sensitive_values() -> None:
         "Accept": "application/json",
         "Authorization": "***",
     }
+
+
+@pytest.mark.asyncio
+async def test_request_options_can_disable_retries(httpx_mock: HTTPXMock) -> None:
+    """Проверяет отключение retry для отдельного запроса."""
+    httpx_mock.add_response(url="https://api.is74.ru/domofon/relays/900001/open", status_code=500)
+
+    async with IS74Transport(max_retries=1, backoff_factor=0) as transport:
+        with pytest.raises(IS74HTTPError):
+            await transport.request_json(
+                "POST",
+                "https://api.is74.ru/domofon/relays/900001/open",
+                RequestOptions(max_retries=0),
+            )
+
+    assert len(httpx_mock.get_requests()) == 1

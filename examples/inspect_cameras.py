@@ -8,7 +8,6 @@ from collections.abc import Awaitable, Iterable, Iterator
 from urllib.parse import urlencode
 
 from _common import authorize_client, optional_env, read_bool_env
-
 from pyis74 import IS74Async, IS74Error
 from pyis74.endpoints import (
     CAMS_GET_GROUP,

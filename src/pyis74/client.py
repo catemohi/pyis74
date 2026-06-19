@@ -13,7 +13,7 @@ from pyis74.account import AccountAPI, SyncAccountAPI
 from pyis74.auth import AuthAPI, SyncAuthAPI
 from pyis74.cameras import CamerasAPI, SyncCamerasAPI
 from pyis74.domofon import DomofonAPI, SyncDomofonAPI
-from pyis74.endpoints import join_url
+from pyis74.endpoints import DEFAULT_BASE_DOMAIN, IS74ServiceUrls
 from pyis74.exceptions import IS74AuthRequiredError, IS74Error, IS74TransportError
 from pyis74.history import HistoryAPI, SyncHistoryAPI
 from pyis74.options import ClientRequestOptions
@@ -30,13 +30,14 @@ from pyis74.types import JsonValue, normalize_json_value
 class IS74Async:
     """Асинхронный клиент верхнего уровня для API IS74."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         *,
         transport: IS74Transport | None = None,
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
         backoff_factor: float = DEFAULT_BACKOFF_FACTOR,
+        base_domain: str = DEFAULT_BASE_DOMAIN,
         mobile_token: str | None = None,
     ) -> None:
         """Создает асинхронный клиент.
@@ -46,6 +47,7 @@ class IS74Async:
             timeout: Таймаут запросов в секундах для собственного transport.
             max_retries: Количество повторных попыток после первого запроса.
             backoff_factor: Базовая задержка между повторными попытками.
+            base_domain: Корневой домен IS74, например `is74.ru`.
             mobile_token: Существующий mobile access token для запросов аккаунта.
         """
         self._owns_transport = transport is None
@@ -54,6 +56,7 @@ class IS74Async:
             max_retries=max_retries,
             backoff_factor=backoff_factor,
         )
+        self._urls = IS74ServiceUrls(base_domain=base_domain)
         self._mobile_token = mobile_token
         self._lk_token: str | None = None
         self.auth: AuthAPI = AuthAPI(self)
@@ -84,6 +87,11 @@ class IS74Async:
     def mobile_token(self) -> str | None:
         """Возвращает текущий mobile access token."""
         return self._mobile_token
+
+    @property
+    def urls(self) -> IS74ServiceUrls:
+        """Возвращает URL-конфигурацию клиента."""
+        return self._urls
 
     def set_mobile_token(self, token: str) -> None:
         """Сохраняет mobile access token в клиенте.
@@ -146,7 +154,7 @@ class IS74Async:
     ) -> httpx.Response:
         """Выполняет низкоуровневый HTTP-запрос к API IS74."""
         request_options = options or ClientRequestOptions()
-        url = join_url(request_options.base_url, target)
+        url = self._urls.join(request_options.base_url, target)
         headers = dict(request_options.headers or {})
         if request_options.auth_token is not None:
             headers["Authorization"] = f"Bearer {request_options.auth_token}"
@@ -157,6 +165,7 @@ class IS74Async:
             json_body=request_options.json_body,
             form=request_options.form,
             content=request_options.content,
+            max_retries=request_options.max_retries,
         )
         return await self._transport.request(method, url, transport_options)
 
@@ -259,6 +268,7 @@ class IS74:
     timeout: float = DEFAULT_TIMEOUT
     max_retries: int = DEFAULT_MAX_RETRIES
     backoff_factor: float = DEFAULT_BACKOFF_FACTOR
+    base_domain: str = DEFAULT_BASE_DOMAIN
     mobile_token: str | None = None
     lk_token: str | None = None
     auth: SyncAuthAPI = field(init=False)
@@ -373,6 +383,7 @@ class IS74:
             timeout=self.timeout,
             max_retries=self.max_retries,
             backoff_factor=self.backoff_factor,
+            base_domain=self.base_domain,
             mobile_token=self.mobile_token,
         ) as client:
             if self.lk_token is not None:

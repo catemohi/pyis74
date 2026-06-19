@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 
 from _common import authorize_client, read_bool_env, read_named_int_env, require_env_value
-
 from pyis74 import IS74Async
 
 

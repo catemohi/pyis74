@@ -6,7 +6,6 @@ import asyncio
 import json
 
 from _common import authorize_client, read_int_env
-
 from pyis74 import IS74Async
 from pyis74.endpoints import DOMOFON_RELAY_TEMPLATE
 

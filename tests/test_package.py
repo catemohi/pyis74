@@ -1,5 +1,7 @@
 """Тесты базовой импортируемости пакета."""
 
+from importlib.resources import files
+
 import pyis74
 
 
@@ -13,6 +15,7 @@ def test_package_exports_core_client() -> None:
     """Проверяет, что пакет экспортирует core-клиенты."""
     assert pyis74.IS74 is not None
     assert pyis74.IS74Async is not None
+    assert pyis74.IS74ServiceUrls is not None
 
 
 def test_package_exports_account_models() -> None:
@@ -51,3 +54,8 @@ def test_package_exports_high_level_models() -> None:
     """Проверяет, что пакет экспортирует high-level модели."""
     assert pyis74.DomofonRelayCameras is not None
     assert pyis74.HistoryEventKind is not None
+
+
+def test_package_includes_py_typed_marker() -> None:
+    """Проверяет наличие PEP 561 marker для downstream type checkers."""
+    assert files("pyis74").joinpath("py.typed").is_file()

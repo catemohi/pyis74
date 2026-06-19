@@ -27,7 +27,7 @@ from pyis74 import IS74Async
 
 
 async def main() -> None:
-    async with IS74Async() as client:
+    async with IS74Async(base_domain="is74.ru") as client:
         await client.auth.login_with_password("login", "password")
         summary = await client.account.get_summary()
         print(summary.user.full_name)
@@ -54,6 +54,7 @@ phone auth, проверка адреса, проверка баланса, ис
 
 Документация публичных методов находится в [`docs/public-api.md`](docs/public-api.md):
 там описаны входные параметры, возвращаемые модели и безопасные примеры данных.
+История изменений ведется в [`CHANGELOG.md`](CHANGELOG.md).
 
 Домофонные примеры разделены на два пути:
 
@@ -66,7 +67,8 @@ phone auth, проверка адреса, проверка баланса, ис
 История событий доступна через `client.history.get_events(...)`. Метод использует
 CRM/LK API и при необходимости получает LK token через текущий mobile token.
 Для частого сценария последних открытий и звонков есть
-`client.history.get_recent_activity(...)`.
+`client.history.get_recent_activity(...)`. Для добора нескольких страниц до нужного
+количества событий есть `client.history.get_events_until_limit(...)`.
 
 Camera API доступен через `client.cameras`:
 
@@ -78,6 +80,12 @@ Camera API доступен через `client.cameras`:
 
 У каждой `Camera` есть свойство `streams`, которое собирает HLS, MSE, snapshot и
 WebSocket URL в одну модель `CameraStreams`.
+Подписанные stream/snapshot URL считаются временными credential-like значениями: не
+сохраняйте их в публичных логах, документации и fixtures.
+
+По умолчанию клиент использует домен `is74.ru`. Если совместимый API расположен на
+другом домене, передайте `base_domain` в `IS74Async` или `IS74`; high-level методы и
+`ClientRequestOptions(base_url=BaseUrl.*)` будут строить URL от этого домена.
 
 Диагностические примеры `examples/inspect_cameras.py` и
 `examples/inspect_user_device.py` по умолчанию печатают безопасную сводку без адресов,
@@ -90,8 +98,10 @@ UUID, MAC-адресов и подписанных URL. Сырой JSON вклю
 uv sync --all-groups
 uv run ruff format
 uv run ruff check
-uv run mypy src tests
+uv run mypy
 uv run pytest
+uv run python scripts/privacy_scan.py
+uv build
 ```
 
 ## Статус API

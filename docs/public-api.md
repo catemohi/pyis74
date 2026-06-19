@@ -18,6 +18,18 @@ async with IS74Async(mobile_token="mobile-token-example") as client:
     print(balance.balance)
 ```
 
+Если API доступен на другом домене с теми же service-prefix, задайте домен при
+инициализации:
+
+```python
+async with IS74Async(base_domain="is74.example", mobile_token="mobile-token-example") as client:
+    groups = await client.cameras.get_groups()
+```
+
+При `base_domain="is74.example"` клиент строит URL вида
+`https://api.is74.example`, `https://cams.is74.example`,
+`https://td-crm.is74.example`.
+
 ```python
 from pyis74 import IS74
 
@@ -46,6 +58,7 @@ token, открывает доступ к доменам `auth`, `account`, `dom
 - `timeout: float` - таймаут запроса в секундах.
 - `max_retries: int` - количество повторных попыток после первого запроса.
 - `backoff_factor: float` - базовая задержка между повторами.
+- `base_domain: str` - корневой домен IS74. По умолчанию `is74.ru`.
 - `mobile_token: str | None` - уже полученный mobile access token.
 
 Возвращает экземпляр клиента. Клиент поддерживает async context manager и метод
@@ -61,6 +74,7 @@ token, открывает доступ к доменам `auth`, `account`, `dom
 - `timeout: float`
 - `max_retries: int`
 - `backoff_factor: float`
+- `base_domain: str`
 - `mobile_token: str | None`
 - `lk_token: str | None`
 
@@ -70,11 +84,40 @@ event loop, будет поднят `IS74Error`; в таком коде нужн
 ### Token helpers
 
 `mobile_token`, `set_mobile_token(token)`, `clear_mobile_token()` управляют token для
-`api.is74.ru` и `cams.is74.ru`.
+mobile API и camera API текущего домена клиента.
 
 `lk_token`, `set_lk_token(token)`, `clear_lk_token()` управляют token для CRM/LK API.
 Если LK token нужен, но еще не задан, методы `request_lk`, `history.get_events()` и
 CRM-открытие домофона попробуют получить его через текущий mobile token.
+
+### URL configuration
+
+`IS74Async(..., base_domain="...")` и `IS74(..., base_domain="...")` задают корневой
+домен для high-level методов и low-level запросов с `BaseUrl.*`.
+
+```python
+from pyis74 import BaseUrl, ClientRequestOptions, IS74Async
+
+
+async with IS74Async(base_domain="is74.example") as client:
+    payload = await client.request(
+        "GET",
+        "/api/self-cams-with-group",
+        ClientRequestOptions(base_url=BaseUrl.CAMS),
+    )
+```
+
+Этот пример отправит запрос на `https://cams.is74.example/api/self-cams-with-group`.
+Если в `target` передан абсолютный URL, клиент использует его без пересборки. Это
+нужно для ссылок `LINKS.open` и signed media URL, которые API возвращает уже готовыми.
+
+`client.urls` возвращает `IS74ServiceUrls` - frozen-объект с вычисленными URL сервисов
+и endpoint:
+
+```python
+print(client.urls.api)
+print(client.urls.crm_history)
+```
 
 ### Low-level requests
 
@@ -107,6 +150,8 @@ payload = await client.request_mobile(
 - `json_body: JsonValue | None`
 - `form: dict[str, str] | None`
 - `content: str | bytes | None`
+- `max_retries: int | None` - request-level override для retry. Если `None`,
+  используется настройка transport.
 
 Возвращают `JsonValue`: `str`, `int`, `float`, `bool`, `None`, список или словарь с
 такими значениями.
@@ -446,9 +491,9 @@ for relay in relays:
 Открывает уже загруженный объект `DomofonRelay`.
 
 Зачем нужен этот метод: разные реле могут открываться через разные backend. Если у
-реле есть `LINKS.open`, метод использует именно эту ссылку. Для `api.is74.ru` будет
-выполнен mobile `POST`; для `td-crm.is74.ru` будет получен LK token и выполнен CRM
-`GET`.
+реле есть `LINKS.open`, метод использует именно эту ссылку. Для mobile API текущего
+домена будет выполнен mobile `POST`; для CRM API текущего домена будет получен LK token
+и выполнен CRM `GET`.
 
 Принимает:
 
@@ -456,6 +501,10 @@ for relay in relays:
 - `from_app: bool` - добавлять `from=app` для mobile API-open.
 
 Возвращает `DomofonOpenResult`.
+
+Запросы открытия являются side-effect операциями, поэтому библиотека принудительно
+отключает retry для HTTP-запроса открытия. Успешный HTTP-статус означает только то, что
+backend принял запрос; физическое открытие реле нужно проверять отдельно.
 
 ```python
 relay = (await client.domofon.get_relays())[0]
@@ -609,6 +658,30 @@ for event in events.events:
 
 Также доступны быстрые признаки `event.is_open` и `event.is_call`.
 
+### `get_events_until_limit(limit, from_date=None, to_date=None, start_page=1, per_page=20)`
+
+Последовательно читает страницы истории через `get_events()` и останавливается, когда
+собрано `limit` событий, API вернул пустую страницу или по данным `count`/размеру
+страницы видно, что следующей страницы нет.
+
+Принимает:
+
+- `limit: int` - максимальное количество событий.
+- `from_date: date | str | None`
+- `to_date: date | str | None`
+- `start_page: int`
+- `per_page: int`
+
+Возвращает `tuple[HistoryEvent, ...]`.
+
+```python
+events = await client.history.get_events_until_limit(limit=50, per_page=20)
+for event in events:
+    print(event.kind.value, event.created_at)
+```
+
+Если `limit`, `start_page` или `per_page` меньше `1`, будет поднят `ValueError`.
+
 ### `get_recent_activity(...)`
 
 Возвращает события текущей страницы, отфильтрованные как последние открытия и звонки.
@@ -645,6 +718,11 @@ events_with_snapshots = history.filter_events(with_images=True)
 Все методы камер требуют mobile token. Media-ссылки из camera API могут быть
 подписанными ссылками прямого доступа к live, архиву или snapshot. Не сохраняйте их в
 публичные логи и документацию.
+
+Подписанные stream/snapshot URL нужно считать временными credential-like значениями.
+Точный срок жизни URL задает backend и библиотека его не гарантирует. Если плеер или
+загрузчик получает ошибку доступа, истечения срока или недоступности media, запросите
+свежие данные camera API и используйте новый URL.
 
 ### `get_self_cams_with_group()`
 
@@ -900,6 +978,7 @@ info = await client.cameras.get_limited_info_by_uuids(uuids)
 - домены `auth`, `account`, `domofon`, `history`, `cameras`;
 - модели из `pyis74.models`;
 - `ClientRequestOptions`;
+- `BaseUrl` и `IS74ServiceUrls`;
 - исключения из `pyis74.exceptions`;
 - типы `JsonValue`, `JsonObject`, `QueryParams`.
 

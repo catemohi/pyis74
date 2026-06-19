@@ -61,8 +61,10 @@ packages = ["src/pyis74"]
 
 [tool.hatch.build.targets.sdist]
 include = [
+  "/CHANGELOG.md",
   "/docs",
   "/examples",
+  "/scripts",
   "/src",
   "/tests",
   "/README.md",
@@ -74,7 +76,7 @@ include = [
 [tool.ruff]
 line-length = 100
 target-version = "py314"
-src = ["src", "tests"]
+src = ["src", "tests", "examples", "scripts"]
 
 [tool.ruff.lint]
 select = [
@@ -116,6 +118,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "examples/**/*.py" = ["T201"]
+"scripts/**/*.py" = ["T201"]
 "tests/**/*.py" = ["D", "S101"]
 
 [tool.ruff.lint.pydocstyle]
@@ -133,7 +136,7 @@ warn_unreachable = true
 warn_unused_ignores = true
 show_error_codes = true
 pretty = true
-files = ["src", "tests"]
+files = ["src", "tests", "examples", "scripts"]
 
 [tool.pytest.ini_options]
 addopts = [
@@ -142,6 +145,9 @@ addopts = [
   "-ra",
 ]
 asyncio_mode = "auto"
+markers = [
+  "integration: live IS74 API tests, skipped unless IS74_RUN_INTEGRATION=yes",
+]
 testpaths = ["tests"]
 
 [tool.coverage.run]

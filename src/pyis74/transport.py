@@ -49,6 +49,8 @@ class RequestOptions:
         json_body: JSON-тело запроса.
         form: Form-urlencoded данные запроса.
         content: Текстовое или бинарное тело запроса.
+        max_retries: Количество повторных попыток для этого запроса. Если `None`,
+            используется значение transport.
     """
 
     headers: dict[str, str] | None = None
@@ -56,6 +58,7 @@ class RequestOptions:
     json_body: JsonValue | None = None
     form: dict[str, str] | None = None
     content: str | bytes | None = None
+    max_retries: int | None = None
 
 
 def redact_headers(headers: dict[str, str]) -> dict[str, str]:
@@ -139,13 +142,22 @@ class IS74Transport:
             IS74TransportError: Запрос не дошел до валидного HTTP-ответа.
         """
         request_options = options or RequestOptions()
+        max_retries = (
+            self._max_retries
+            if request_options.max_retries is None
+            else request_options.max_retries
+        )
+        if max_retries < 0:
+            msg = "request max_retries must be greater than or equal to zero."
+            raise ValueError(msg)
+
         response: httpx.Response | None = None
 
-        for attempt in range(self._max_retries + 1):
+        for attempt in range(max_retries + 1):
             try:
                 response = await self._request_once(method, url, request_options)
             except (httpx.TimeoutException, httpx.TransportError) as error:
-                if attempt >= self._max_retries:
+                if attempt >= max_retries:
                     msg = f"Transport error for {method.upper()} {url}."
                     raise IS74TransportError(msg) from error
                 await self._sleep_before_retry(attempt)
@@ -154,7 +166,7 @@ class IS74Transport:
             if response.status_code < HTTP_ERROR_STATUS:
                 return response
 
-            if not self._should_retry_response(response) or attempt >= self._max_retries:
+            if not self._should_retry_response(response) or attempt >= max_retries:
                 raise self._build_http_error(method, url, response)
 
             await self._sleep_before_retry(attempt, response)

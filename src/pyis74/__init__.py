@@ -7,7 +7,7 @@
 from importlib.metadata import PackageNotFoundError, version
 
 from pyis74.client import IS74, IS74Async
-from pyis74.endpoints import BaseUrl
+from pyis74.endpoints import BaseUrl, IS74ServiceUrls
 from pyis74.exceptions import (
     IS74APIError,
     IS74AuthError,
@@ -117,6 +117,7 @@ __all__ = (
     "IS74Error",
     "IS74HTTPError",
     "IS74RateLimitError",
+    "IS74ServiceUrls",
     "IS74Transport",
     "IS74TransportError",
     "JsonObject",

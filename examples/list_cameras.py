@@ -6,7 +6,6 @@ import asyncio
 from typing import Literal
 
 from _common import authorize_client, read_bool_env
-
 from pyis74 import IS74Async
 from pyis74.models import Camera, SelfCameraGroup
 

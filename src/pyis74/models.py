@@ -70,7 +70,7 @@ class LkToken:
         """Создает модель CRM/LK token из JSON-ответа API.
 
         Args:
-            payload: JSON-ответ `td-crm.is74.ru/api/auth-lk`.
+            payload: JSON-ответ CRM auth endpoint.
 
         Returns:
             Модель CRM/LK token.
@@ -808,7 +808,7 @@ class HistoryResponse:
         """Создает страницу истории из JSON.
 
         Args:
-            payload: JSON-ответ `td-crm.is74.ru/api/user/history`.
+            payload: JSON-ответ CRM history endpoint.
 
         Returns:
             Страница истории событий.

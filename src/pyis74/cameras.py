@@ -6,7 +6,6 @@ from collections.abc import Iterable
 from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 
-from pyis74 import endpoints
 from pyis74.exceptions import IS74APIError
 from pyis74.models import (
     Camera,
@@ -41,7 +40,7 @@ class CamerasAPI:
         Returns:
             Кортеж групп камер пользователя.
         """
-        payload = await self._client.request_mobile("GET", endpoints.CAMS_SELF_WITH_GROUP)
+        payload = await self._client.request_mobile("GET", self._client.urls.cams_self_with_group)
         return parse_self_camera_groups(payload)
 
     async def get_groups(self, *, self_cams: bool = False) -> tuple[CameraGroup, ...]:
@@ -55,7 +54,7 @@ class CamerasAPI:
         """
         payload = await self._client.request_mobile(
             "GET",
-            endpoints.CAMS_GET_GROUP,
+            self._client.urls.cams_get_group,
             ClientRequestOptions(params={"selfCams": True} if self_cams else None),
         )
         return parse_camera_groups(payload)
@@ -72,7 +71,10 @@ class CamerasAPI:
         Returns:
             Содержимое группы камер.
         """
-        payload = await self._client.request_mobile("GET", build_group_url(group_id))
+        payload = await self._client.request_mobile(
+            "GET",
+            build_group_url(group_id, self._client.urls.cams_get_group),
+        )
         return parse_camera_group_content(payload)
 
     async def get_limited_info_by_uuid(self, camera_uuid: str) -> CameraLimitedInfo:
@@ -101,7 +103,7 @@ class CamerasAPI:
 
         payload = await self._client.request_mobile(
             "POST",
-            endpoints.CAMS_LIMITED_INFO_BY_UUID,
+            self._client.urls.cams_limited_info_by_uuid,
             ClientRequestOptions(
                 headers=FORM_HEADERS,
                 content=urlencode([("CAMERA_UUIDS[]", camera_uuid) for camera_uuid in uuids]),
@@ -268,13 +270,14 @@ def require_json_object_list(payload: JsonValue, response_name: str) -> tuple[Js
     return tuple(items)
 
 
-def build_group_url(group_id: int | str) -> str:
+def build_group_url(group_id: int | str, get_group_url: str) -> str:
     """Собирает URL детального просмотра группы камер.
 
     Args:
         group_id: ID группы.
+        get_group_url: URL endpoint `/api/get-group/` для домена клиента.
 
     Returns:
-        Абсолютный URL `cams.is74.ru/api/get-group/{group_id}`.
+        Абсолютный URL просмотра группы.
     """
-    return f"{endpoints.CAMS_GET_GROUP.rstrip('/')}/{group_id}"
+    return f"{get_group_url.rstrip('/')}/{group_id}"

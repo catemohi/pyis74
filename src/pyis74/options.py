@@ -20,6 +20,8 @@ class ClientRequestOptions:
         json_body: JSON-тело запроса.
         form: Form-urlencoded данные запроса.
         content: Текстовое или бинарное тело запроса.
+        max_retries: Количество повторных попыток для конкретного запроса.
+            Если `None`, используется настройка transport.
     """
 
     base_url: BaseUrl | str = BaseUrl.API
@@ -29,3 +31,4 @@ class ClientRequestOptions:
     json_body: JsonValue | None = None
     form: dict[str, str] | None = None
     content: str | bytes | None = None
+    max_retries: int | None = None

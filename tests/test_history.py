@@ -15,6 +15,8 @@ HISTORY_PER_PAGE = 5
 HISTORY_COUNT = 11
 BUYER_ID = 1
 HISTORY_EVENT_COUNT = 3
+HISTORY_LIMIT = 3
+EXPECTED_HISTORY_PAGE_REQUESTS = 2
 HISTORY_URL = (
     "https://td-crm.is74.ru/api/user/history?from=2026-06-01&to=2026-06-19&page=2&perPage=5"
 )
@@ -115,3 +117,38 @@ def test_sync_client_gets_history_with_existing_lk_token(httpx_mock: HTTPXMock) 
     request = httpx_mock.get_request()
     assert request is not None
     assert request.headers["authorization"] == "Bearer lk-token"
+
+
+@pytest.mark.asyncio
+async def test_get_events_until_limit_fetches_multiple_pages(httpx_mock: HTTPXMock) -> None:
+    """Проверяет добор истории по страницам до лимита."""
+    httpx_mock.add_response(
+        method="GET",
+        url="https://td-crm.is74.ru/api/user/history?page=1&perPage=2",
+        json={
+            "data": [
+                {"create_date": "2026-06-19T12:30:00Z", "type": "OPEN_API"},
+                {"create_date": "2026-06-19T12:31:00Z", "type": "HANDSET_CALL"},
+            ],
+            "page": 1,
+            "perPage": 2,
+            "count": HISTORY_LIMIT,
+        },
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url="https://td-crm.is74.ru/api/user/history?page=2&perPage=2",
+        json={
+            "data": [{"create_date": "2026-06-19T12:32:00Z", "type": "OPEN_INTERNAL"}],
+            "page": 2,
+            "perPage": 2,
+            "count": HISTORY_LIMIT,
+        },
+    )
+
+    async with IS74Async(backoff_factor=0) as client:
+        client.set_lk_token("lk-token")
+        events = await client.history.get_events_until_limit(limit=HISTORY_LIMIT, per_page=2)
+
+    assert [event.event_type for event in events] == ["OPEN_API", "HANDSET_CALL", "OPEN_INTERNAL"]
+    assert len(httpx_mock.get_requests()) == EXPECTED_HISTORY_PAGE_REQUESTS
