@@ -2,6 +2,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/pyis74.svg)](https://pypi.org/project/pyis74/)
 [![Python versions](https://img.shields.io/pypi/pyversions/pyis74.svg)](https://pypi.org/project/pyis74/)
+[![PyPI Downloads](https://static.pepy.tech/badge/pyis74/month)](https://pepy.tech/projects/pyis74)
 [![CI](https://github.com/catemohi/pyis74/actions/workflows/ci.yml/badge.svg)](https://github.com/catemohi/pyis74/actions/workflows/ci.yml)
 [![Release](https://github.com/catemohi/pyis74/actions/workflows/release.yml/badge.svg)](https://github.com/catemohi/pyis74/actions/workflows/release.yml)
 
